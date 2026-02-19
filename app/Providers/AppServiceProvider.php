@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Account; // Thêm dòng này
+use App\Policies\AccountPolicy; // Thêm dòng này
+use Illuminate\Support\Facades\Gate; // Thêm dòng này
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +22,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Đăng ký Policy tại đây
+        Gate::policy(Account::class, AccountPolicy::class);
     }
 }
