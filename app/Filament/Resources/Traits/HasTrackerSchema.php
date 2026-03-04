@@ -324,13 +324,13 @@ trait HasTrackerSchema
 
                                 Forms\Components\Select::make('status')
                                     ->label('Status')
-                                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                                    ->options([
                                         'pending' => 'Pending',
                                         'confirmed' => 'Confirmed',
                                         'ineligible' => 'Ineligible',
                                         'missing' => 'Missing',
                                         'clicked' => 'Clicked / Ordered',
-                                    })
+                                    ])
                                     ->default('clicked')
                                     ->required(),
                             ]),
