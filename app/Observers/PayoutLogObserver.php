@@ -48,15 +48,20 @@ class PayoutLogObserver implements ShouldHandleEventsAfterCommit
     public function updated(PayoutLog $payoutLog): void
     {
         // 🟢 3. CẬP NHẬT BALANCE (Chỉ chạy khi status từ Pending -> Completed)
-        if ($payoutLog->isDirty('status') && $payoutLog->status === 'completed') {
+        if ($payoutLog->wasChanged('status') && $payoutLog->status === 'completed') {
             $method = $payoutLog->payoutMethod;
 
             if ($method) {
-                // Nếu là Withdrawal: Cộng tiền vào ví
+                // Nếu là Withdrawal (Dành cho PayPal): Cộng tiền vào ví
                 if ($payoutLog->transaction_type === 'withdrawal') {
                     $method->increment('current_balance', $payoutLog->net_amount_usd);
                 }
-                // Nếu là Liquidation: Trừ tiền khỏi ví (vì đã lấy tiền mặt VND)
+                    
+                // Nếu là Hold (Keep Code) (Dành cho Gift Card): Cộng tiền vào ví
+                elseif ($payoutLog->transaction_type === 'hold') {
+                    $method->decrement('current_balance', $payoutLog->amount_usd);
+                }
+                                    // Nếu là Liquidation: Trừ tiền khỏi ví (vì đã lấy tiền mặt VND)
                 elseif ($payoutLog->transaction_type === 'liquidation') {
                     $method->decrement('current_balance', $payoutLog->amount_usd);
                 }
