@@ -20,11 +20,16 @@ class SyncGoogleSheetJob implements ShouldQueue
      */
     public function __construct(
         protected $recordId,
-        protected $modelClass
+        protected $modelClass,
+        protected string $action = 'upsert'  // mặc định là upsert
     ) {}
-
+    
     public function handle(GoogleSheetService $service): void
     {
+        if ($this->action === 'delete') {
+        $service->deleteRowsByIds([(string)$this->recordId], $targetTab);
+        return;
+    }
         try {
             // 1. Tìm bản ghi cụ thể
             $record = $this->modelClass::find($this->recordId);
