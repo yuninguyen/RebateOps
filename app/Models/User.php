@@ -6,11 +6,21 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
+
+    /**
+     * Định nghĩa mối quan hệ: Một User có nhiều Accounts
+     */
+    public function accounts(): HasMany
+    {
+        return $this->hasMany(Account::class, 'user_id'); 
+        // Đảm bảo 'user_id' là tên cột khóa ngoại trong bảng accounts
+    }
 
     /**
      * The attributes that are mass assignable.

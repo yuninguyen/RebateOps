@@ -16,7 +16,7 @@ public function up(): void
         $table->string('platform');   // Ví dụ: Rakuten, RetailMeNot, PayPal...
         $table->string('username');
         $table->string('password');
-        $table->json('status')->default('active'); // active, used, linked, unlink, limited, banned
+        $table->json('status')->nullable(); // active, used, linked, unlink, limited, banned
         $table->text('note')->nullable(); // Ghi chú thêm
         $table->foreignId('user_id')->nullable()->constrained(); // Nhân viên đang giữ
         $table->timestamps();

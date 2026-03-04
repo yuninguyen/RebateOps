@@ -5,9 +5,12 @@ namespace App\Filament\Resources\UserResource\Pages;
 use App\Filament\Resources\UserResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Traits\RedirectsToIndex; // <-- Nhúng Trait
 
 class EditUser extends EditRecord
 {
+    use RedirectsToIndex; // <-- Gọi ra sử dụng, xong! Không cần viết lại hàm getRedirectUrl nữa.
+    
     protected static string $resource = UserResource::class;
 
     protected function getHeaderActions(): array

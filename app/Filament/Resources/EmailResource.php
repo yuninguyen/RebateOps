@@ -16,16 +16,20 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use OpenSpout\Reader\Common\ColumnWidth;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Enums\FiltersLayout;
 
 class EmailResource extends Resource
 {
+    use \App\Filament\Resources\Traits\HasEmailSchema;
+
     protected static ?string $model = Email::class;
 
     // Đổi sang icon phong bì cho Email
     protected static ?string $navigationIcon = 'heroicon-o-envelope';
 
     // Thêm dòng này để gom vào nhóm
-    protected static ?string $navigationGroup = 'Quản lý tài nguyên';
+    protected static ?string $navigationGroup = 'RESOURCE HUB';
 
     // Thêm dòng này để Email luôn nằm trên Account
     protected static ?int $navigationSort = 1;
@@ -66,21 +70,14 @@ class EmailResource extends Resource
 
                         Forms\Components\select::make('status')
                             ->label('Status')
-                            ->options([
+                            ->formatStateUsing(fn(string $state): string => match ($state) {
                                 'active' => 'Live',
                                 'disabled' => 'Disabled',
                                 'locked' => 'Locked',
-                            ])
+                            })
                             ->default('active')
                             ->required()
                             ->native(false),
-
-                        Forms\Components\Select::make('platform')
-                            ->label('Platforms')
-                            ->multiple()
-                            ->relationship('accounts', 'platform')
-                            ->preload()
-                            ->searchable(),
 
                         Forms\Components\DatePicker::make('email_created_at')
                             ->label('Date Created')
@@ -200,7 +197,7 @@ class EmailResource extends Resource
                     ->toggleable()
                     // Tự động viết hoa chữ cái đầu (outlook -> Outlook)
                     ->formatStateUsing(fn(string $state): string => ucfirst($state)),
-                    
+
 
                 // Cột thông minh: Hiển thị số lượng tài khoản đang dùng Email này
                 Tables\Columns\TextColumn::make('accounts_count')
@@ -225,6 +222,7 @@ class EmailResource extends Resource
                     ->toggleable(), // Cho phép ẩn/hiện cột này 
             ])
 
+            ->persistFiltersInSession() // Ghi nhớ bộ lọc trong phiên làm việc
             ->filters([
                 // 1. Bộ lọc theo Provider (Gmail, Outlook, Yahoo...)
                 SelectFilter::make('provider')
@@ -266,13 +264,19 @@ class EmailResource extends Resource
                 // 2. Bộ lọc theo Trạng thái (Live, Locked, Disabled)
                 SelectFilter::make('status')
                     ->label('Status')
-                    ->options([
+                    ->formatStateUsing(fn(string $state): string => match ($state) {
                         'active' => 'Live',
                         'disabled' => 'Disabled',
                         'locked' => 'Locked',
-                    ])
+                    })
                     ->placeholder('All Status'),
             ])
+
+            // Giới hạn số cột hiển thị trên 1 hàng (ví dụ 4 cột cho 4 bộ lọc)
+            ->filtersFormColumns(3)
+
+            // HIỂN THỊ DÀN HÀNG NGANG TRÊN ĐẦU BẢNG
+            ->filtersLayout(FiltersLayout::AboveContent)
 
             ->actions([
                 Tables\Actions\ActionGroup::make([
@@ -335,7 +339,52 @@ class EmailResource extends Resource
 
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
+                    // 🟢 NÚT EXPORT EMAIL ĐƯỢC CHỌN
+                    Tables\Actions\BulkAction::make('export_emails_to_sheet')
+                        ->label('Export to Google Sheet')
+                        ->icon('heroicon-o-table-cells')
+                        ->color('success')
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            try {
+                                $sheetService = app(\App\Services\GoogleSheetService::class);
+                                $targetTab = 'Emails';
 
+                                // 1. Đảm bảo Tab tồn tại
+                                $sheetService->createSheetIfNotExist($targetTab);
+
+                                // 2. Chuẩn bị dữ liệu (Sử dụng hàm format từ Trait HasEmailSchema)
+                                $rows = $records->map(fn($record) => static::formatEmailForSheet($record))->toArray();
+
+                                // 3. Upsert lên Sheet (Tự động nhận diện Header từ Trait)
+                                $sheetService->upsertRows($rows, $targetTab, static::$emailHeaders);
+
+                                // 4. ĐỊNH DẠNG SAU KHI SYNC
+                                // Tìm cột Status để bôi màu
+                                $statusIdx = array_search('Status', static::$emailHeaders);
+                                $sheetService->applyFormattingWithRules($targetTab, $statusIdx, [
+                                    'Live'     => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
+                                    'Disabled' => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],
+                                    'Locked'   => ['red' => 0.9,  'green' => 0.4,  'blue' => 0.4],
+                                ]);
+
+                                // Clip các cột dài (Email, Pass, Platforms, Note)
+                                $sheetService->formatColumnsAsClip($targetTab, 2, 3);
+                                $sheetService->formatColumnsAsClip($targetTab, 9, 10);
+
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Export Success!')
+                                    ->body('Synced ' . count($records) . ' email(s) to Google Sheet.')
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Sync Error!')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        })
+                        ->deselectRecordsAfterCompletion(), // Tự động bỏ tích sau khi xong
                     // Reset Date Create Selected
                     Tables\Actions\BulkAction::make('clear_date_create')
                         ->label('Clear Date Create Selected')

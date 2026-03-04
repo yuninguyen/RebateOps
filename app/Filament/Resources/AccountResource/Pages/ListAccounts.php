@@ -13,11 +13,12 @@ class ListAccounts extends ListRecords
 {
     protected static string $resource = AccountResource::class;
 
+    /*
     public function getMaxContentWidth(): string
     {
         return 'full'; // Ép bảng tràn hết chiều ngang màn hình
     }
-
+    */
 
     protected function getHeaderActions(): array
     {
@@ -35,7 +36,6 @@ class ListAccounts extends ListRecords
                 ->label('Export All Data')
                 ->color('info')
                 ->icon('heroicon-o-arrow-down-tray'),
-
             \Filament\Actions\CreateAction::make(),
         ];
     }

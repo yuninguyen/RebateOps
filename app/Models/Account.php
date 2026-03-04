@@ -4,9 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\Traits\LogsActivity; // Bật tính năng Log
+use Spatie\Activitylog\LogOptions;          // Tùy chọn Log
 
 class Account extends Model
 {
+    use LogsActivity; // Kích hoạt máy quay cho Account
+
     public $timestamps = true; // Đảm bảo vẫn dùng timestamp
 
     // Cho phép điền dữ liệu vào các cột này
@@ -33,6 +37,32 @@ class Account extends Model
         'account_created_at' => 'date',
     ];
 
+    protected $attributes = [
+        'status' => '["active"]', // Đặt giá trị mặc định là một mảng JSON
+    ];
+
+    public function getFilamentName(): string
+    {
+        return "{$this->email_id} - " . strtoupper($this->platform);
+    }
+
+    // Cấu hình theo dõi toàn bộ các cột được phép điền
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
+    /**
+     * Khai báo mối quan hệ với bảng RebateTracker
+     */
+    public function rebateTrackers()
+    {
+        // Hãy chắc chắn 'account_id' là tên cột thực tế trong bảng rebate_trackers
+        return $this->hasMany(\App\Models\RebateTracker::class, 'account_id');
+    }
 
     /**
      * Khai báo mối quan hệ: Một tài khoản thuộc về một Người dùng (Holder)

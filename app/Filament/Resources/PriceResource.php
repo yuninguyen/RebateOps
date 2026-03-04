@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\PriceResource\Pages;
 use App\Filament\Resources\PriceResource\RelationManagers;
 use App\Models\Price;
+use App\Models\Account;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -12,44 +13,42 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use App\Filament\Resources\Traits\HasAccountSchema; // <-- Nhúng Trait
+use App\Filament\Resources\AccountResource\RelationManagers\ActivitiesRelationManager;
 
 class PriceResource extends Resource
 {
-    protected static ?string $model = Price::class;
+    use HasAccountSchema; // <-- Dòng ma thuật: Gọi toàn bộ Form, Table, Infolist vào đây!
+    
+    protected static ?string $model = Account::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationGroup = 'RESOURCE HUB';
+    protected static ?string $navigationLabel = 'Price.com';
+    protected static ?string $navigationParentItem = 'All Platforms';
+    protected static ?int $navigationSort = 6;
 
-    public static function form(Form $form): Form
+    // Thêm dòng này để thu gọn menu bên trái, nhường chỗ cho bảng
+    protected static bool $isScopedToTenant = false;
+    // THÊM DÒNG NÀY: Đổi đường dẫn URL từ /Price thành /price
+    protected static ?string $slug = 'price';
+
+    // HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Active Junky
+    public static function getEloquentQuery(): Builder
     {
-        return $form
-            ->schema([
-                //
-            ]);
+        return parent::getEloquentQuery()->where('platform', 'Price.com');
     }
 
-    public static function table(Table $table): Table
+    protected function getRedirectUrl(): string
     {
-        return $table
-            ->columns([
-                //
-            ])
-            ->filters([
-                //
-            ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+        // Quay về trang danh sách (List View)
+        return $this->getResource()::getUrl('index');
     }
 
     public static function getRelations(): array
     {
         return [
-            //
+            ActivitiesRelationManager::class, // <-- Gắn bảng Lịch sử vào đây
         ];
     }
 

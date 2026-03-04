@@ -17,7 +17,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-
+use Filament\Support\Facades\FilamentIcon;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\Facades\Blade;
 
@@ -31,6 +31,11 @@ class AdminPanelProvider extends PanelProvider
             ->databaseNotifications()
             ->path('admin')
             ->login()
+            ->navigationGroups([
+                'RESOURCE HUB',
+                'WORKING SPACE',
+                'WALLET & PAYOUTS',
+            ])
             ->font('Inter')
             ->colors([
                 'primary' => Color::Amber,
@@ -38,13 +43,17 @@ class AdminPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
-                Pages\Dashboard::class,
+                \App\Filament\Pages\Dashboard::class, // ← Dùng cái mới
+            ])
+            ->resources([
+                config('filament-logger.activity_resource')
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 Widgets\AccountWidget::class,
-                \App\Filament\Resources\EmailResource\Widgets\EmailStatusChart::class,
+                \App\Filament\Widgets\EmailStatusChart::class,
                 Widgets\FilamentInfoWidget::class,
+                \App\Filament\Widgets\PayoutStats::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -60,7 +69,6 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-
             ->renderHook(
                 'panels::styles.after',
                 fn(): string => Blade::render("
@@ -69,12 +77,12 @@ class AdminPanelProvider extends PanelProvider
                     @media (min-width: 1024px) {
                         /* 1. Thiết lập biến môi trường cho độ rộng sidebar */
                         :root {
-                            --sidebar-width: 210px !important;
+                            --sidebar-width: 220px !important;
                         }
 
                         /* 2. Ép độ rộng cho Aside */
                         .fi-sidebar {
-                            width: 205px !important;
+                            width: 220px !important;
                         }
 
                         /* 3. Đảm bảo nội dung chính tràn hết diện tích còn lại */
@@ -109,7 +117,11 @@ class AdminPanelProvider extends PanelProvider
                         .fi-badge {
                             font-size: 11px !important; /* Chỉnh kích thước badge nhỏ hơn */
                             padding: 0.25rem 0.4rem !important; /* Điều chỉnh padding để phù hợp với kích thước mới */  
-                        }             
+                        }
+                        /*.fi-ta-text{
+                            justify-content: flex-start !important;
+                        }*/
+                    }             
                     
                 </style>
             "),
@@ -122,6 +134,26 @@ class AdminPanelProvider extends PanelProvider
             'panels::body.end',
             fn(): string => "
             <script>
+            // 🟢 VÁ LỖI: Tạo Clipboard giả lập nếu trình duyệt chạy HTTP
+            if (!navigator.clipboard) {
+                navigator.clipboard = {
+                    writeText: function(text) {
+                        return new Promise((resolve, reject) => {
+                            try {
+                                const el = document.createElement('textarea');
+                                el.value = text;
+                                el.style.position = 'fixed';
+                                el.style.opacity = '0';
+                                document.body.appendChild(el);
+                                el.select();
+                                const success = document.execCommand('copy');
+                                document.body.removeChild(el);
+                                if (success) resolve(); else reject();
+                            } catch (err) { reject(err); }
+                        });
+                    }
+                };
+            }
                 window.addEventListener('copy-to-clipboard', event => {
                     if (navigator.clipboard && navigator.clipboard.writeText) {
                         navigator.clipboard.writeText(event.detail.text).then(() => {
@@ -136,7 +168,8 @@ class AdminPanelProvider extends PanelProvider
                         document.execCommand('copy');
                         document.body.removeChild(el);
                     }
-                });
+                }
+                    );
             </script>
         ",
         );
@@ -178,7 +211,14 @@ class AdminPanelProvider extends PanelProvider
                 .get-account-btn:hover {
                     text-decoration: underline;
                 }
-
+                
+                .fi-ta-summary-row td {
+    font-weight: 700;
+    border-top: 2px solid #e5e7eb;
+}
+    .fi-ta-summary-row {
+    background-color: #f9fafb;
+}
             }
             </style>
         "),

@@ -18,48 +18,51 @@ class UserResource extends Resource
     protected static ?string $model = User::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationGroup = 'Settings';
+    protected static ?int $navigationSort = 1; // Hiện trên Activity Log
+    protected static ?string $navigationLabel = 'Users';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\Section::make('Thông tin nhân viên')
-                ->description('Quản lý thông tin đăng nhập và định danh của Holder.')
-                ->schema([
-                    Forms\Components\TextInput::make('name')
-                    ->label('Name')
-                    ->required()
-                    ->maxLength(255),
-                    Forms\Components\TextInput::make('username')
-                    ->label('Username')
-                    ->placeholder('Ví dụ: user01')
-                    ->required()
-                    ->unique(ignoreRecord: true) // Không báo lỗi trùng khi sửa chính user đó
-                    ->maxLength(255)
-                    ->prefix('@'), // Thêm icon @ cho chuyên nghiệp
-                    Forms\Components\TextInput::make('email')
-                    ->label('Email Address')
-                    ->email()
-                    ->required()
-                    ->unique(ignoreRecord: true), // Tránh trùng email
-                    Forms\Components\Select::make('role')
-                    ->label('Role')
-                    ->options([
-                        'admin' => 'Admin',
-                        'holder' => 'Holder',
+                Forms\Components\Section::make('User Information')
+                    ->description('Manage login information and Holder identification.')
+                    ->schema([
+                        Forms\Components\TextInput::make('name')
+                            ->label('Name')
+                            ->required()
+                            ->maxLength(255),
+                        Forms\Components\TextInput::make('username')
+                            ->label('Username')
+                            ->placeholder('Eg: user01')
+                            ->required()
+                            ->unique(ignoreRecord: true) // Không báo lỗi trùng khi sửa chính user đó
+                            ->maxLength(255)
+                            ->prefix('@'), // Thêm icon @ cho chuyên nghiệp
+                        Forms\Components\TextInput::make('email')
+                            ->label('Email Address')
+                            ->email()
+                            ->required()
+                            ->unique(ignoreRecord: true), // Tránh trùng email
+                        Forms\Components\Select::make('role')
+                            ->label('Role')
+                            ->options([
+                                'admin' => 'Admin',
+                                'holder' => 'Holder',
+                            ])
+                            ->default('holder')
+                            ->required()
+                            ->native(false),
+                        Forms\Components\TextInput::make('password')
+                            ->label('Password')
+                            ->placeholder('Leave it blank if you don\'t want to change your password.')
+                            ->password()
+                            ->revealable()
+                            ->dehydrated(fn($state) => filled($state)) // Chỉ lưu nếu có nhập pass mới
+                            ->required(fn(string $context): bool => $context === 'create'), // Bắt buộc khi tạo mới
                     ])
-                    ->default('holder')
-                    ->required()
-                    ->native(false),
-                    Forms\Components\TextInput::make('password')
-                    ->label('Password')
-                    ->placeholder('Để trống nếu không muốn đổi password')
-                    ->password()
-                    ->revealable()
-                    ->dehydrated(fn ($state) => filled($state)) // Chỉ lưu nếu có nhập pass mới
-                    ->required(fn (string $context): bool => $context === 'create'), // Bắt buộc khi tạo mới
-                ])
-            ->columns(2), // Chia làm 2 cột để form gọn gàng;
+                    ->columns(2), // Chia làm 2 cột để form gọn gàng;
             ]);
     }
 
@@ -81,12 +84,12 @@ class UserResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('role')
                     ->label('Role')
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
-                    'admin' => 'Administrator',
-                    'holder' => 'Holder',
-                    default => $state,
-                })
-                ->sortable(),    
+                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                        'admin' => 'Administrator',
+                        'holder' => 'Holder',
+                        default => $state,
+                    })
+                    ->sortable(),
             ])
             ->filters([
                 //

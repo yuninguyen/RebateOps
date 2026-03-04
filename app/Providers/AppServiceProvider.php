@@ -24,5 +24,10 @@ class AppServiceProvider extends ServiceProvider
     {
         // Đăng ký Policy tại đây
         Gate::policy(Account::class, AccountPolicy::class);
+
+        \App\Models\PayoutLog::observe(\App\Observers\PayoutLogObserver::class);
+        \App\Models\RebateTracker::observe(\App\Observers\RebateTrackerObserver::class);
+        \App\Models\PayoutMethod::observe(\App\Observers\PayoutMethodObserver::class);
+        \App\Models\Email::observe(\App\Observers\EmailObserver::class);
     }
 }
