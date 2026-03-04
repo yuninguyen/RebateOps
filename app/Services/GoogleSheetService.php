@@ -6,19 +6,44 @@ use Google\Client;
 use Google\Service\Sheets;
 use Google\Service\Sheets\ValueRange;
 use Google\Service\Sheets\ClearValuesRequest;
+use Illuminate\Support\Facades\Log;
 
 class GoogleSheetService
 {
     protected $client;
     protected $service;
-    protected $spreadsheetId = '1ChEJ3RqMAVWOPyX7ibSOoc_quMiVDBK6A7rFCqP0Ig4'; // Thay ID Google Sheet vào đây
+    protected $spreadsheetId;
 
     public function __construct()
     {
-        $this->client = new Client();
-        $this->client->setAuthConfig(storage_path('app/google-auth.json'));
-        $this->client->addScope(Sheets::SPREADSHEETS);
-        $this->service = new Sheets($this->client);
+        try {
+            // Get configuration from config/services.php
+            $this->spreadsheetId = config('services.google.spreadsheet_id');
+            $authPath = config('services.google.service_account_path');
+
+            // Validate configuration
+            if (empty($this->spreadsheetId)) {
+                throw new \Exception('Google Spreadsheet ID is not configured.');
+            }
+
+            if (!file_exists($authPath)) {
+                throw new \Exception("Google service account file not found.");
+            }
+
+            // Initialize Google Client
+            $this->client = new Client();
+            $this->client->setApplicationName(config('app.name', 'RebateOps'));
+            $this->client->addScope(Sheets::SPREADSHEETS);
+            $this->client->setAuthConfig($authPath);
+            $this->client->setAccessType('offline');
+            $this->service = new Sheets($this->client);
+        } catch (\Exception $e) {
+            Log::error('Failed to initialize GoogleSheetService', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw new \Exception('Google Sheets service initialization failed');
+        }
     }
 
     /**
@@ -82,23 +107,43 @@ class GoogleSheetService
 
     // ==========================================
     // CHIỀU 1: WEB -> SHEET (Thêm một dòng mới)
-    // Đã thêm tham số $sheetName (Nếu không truyền, tự động lấy Sheet đầu tiên)
     // ==========================================
     public function appendRow(array $data, ?string $sheetName = null)
     {
-        // Nếu không chỉ định tên Sheet, lấy mặc định tab đầu tiên để code cũ không bị lỗi
-        $targetSheet = $sheetName ?? $this->getFirstSheetName();
+        try {
+            $targetSheet = $sheetName ?? $this->getFirstSheetName();
 
-        $values = [$data];
-        $body = new ValueRange(['values' => $values]);
-        $params = ['valueInputOption' => 'RAW'];
+            $values = [$data];
+            $body = new ValueRange(['values' => $values]);
+            $params = ['valueInputOption' => 'RAW'];
 
-        return $this->service->spreadsheets_values->append(
-            $this->spreadsheetId,
-            "'{$targetSheet}'!A1",
-            $body,
-            $params
-        );
+            $result = $this->service->spreadsheets_values->append(
+                $this->spreadsheetId,
+                "'{$targetSheet}'!A1",
+                $body,
+                $params
+            );
+
+            Log::info('Successfully appended row to Google Sheets', [
+                'sheet' => $targetSheet,
+                'rows_updated' => $result->getUpdates()->getUpdatedRows()
+            ]);
+
+            return $result;
+        } catch (\Google\Service\Exception $e) {
+            Log::error('Google Sheets API Error - Append Row', [
+                'error' => $e->getMessage(),
+                'data' => $data,
+                'sheet' => $sheetName
+            ]);
+            throw new \Exception('Failed to append data to Google Sheets: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Unexpected error in appendRow', [
+                'error' => $e->getMessage(),
+                'data' => $data
+            ]);
+            throw $e;
+        }
     }
 
     // ==========================================
@@ -106,17 +151,41 @@ class GoogleSheetService
     // ==========================================
     public function appendMultipleRows(array $dataRows, ?string $sheetName = null)
     {
-        $targetSheet = $sheetName ?? $this->getFirstSheetName();
+        try {
+            $targetSheet = $sheetName ?? $this->getFirstSheetName();
 
-        $body = new ValueRange(['values' => $dataRows]);
-        $params = ['valueInputOption' => 'RAW'];
+            $body = new ValueRange(['values' => $dataRows]);
+            $params = ['valueInputOption' => 'RAW'];
 
-        return $this->service->spreadsheets_values->append(
-            $this->spreadsheetId,
-            "'{$targetSheet}'!A1",
-            $body,
-            $params
-        );
+            $result = $this->service->spreadsheets_values->append(
+                $this->spreadsheetId,
+                "'{$targetSheet}'!A1",
+                $body,
+                $params
+            );
+
+            Log::info('Successfully appended multiple rows to Google Sheets', [
+                'sheet' => $targetSheet,
+                'row_count' => count($dataRows),
+                'rows_updated' => $result->getUpdates()->getUpdatedRows()
+            ]);
+
+            return $result;
+        } catch (\Google\Service\Exception $e) {
+            Log::error('Google Sheets API Error - Append Multiple Rows', [
+                'error' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'row_count' => count($dataRows),
+                'sheet' => $sheetName
+            ]);
+            throw new \Exception('Failed to append multiple rows to Google Sheets: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Unexpected error in appendMultipleRows', [
+                'error' => $e->getMessage(),
+                'row_count' => count($dataRows)
+            ]);
+            throw $e;
+        }
     }
 
     // ==========================================
@@ -124,25 +193,17 @@ class GoogleSheetService
     // ==========================================
     public function updateSheet(array $values, $range = 'A1:AC', ?string $sheetName = null)
     {
-        // 1. Xác định tên Sheet và làm sạch khoảng trắng
-        $targetSheet = trim($sheetName ?? $this->getFirstSheetName());
-
         try {
-            // 2. Bọc tên Sheet trong dấu nháy đơn (VÍ DỤ: 'Payout_Logs'!A1:Z1000)
-            // Việc bọc nháy đơn giúp fix lỗi "Unable to parse range" cực kỳ hiệu quả
+            $targetSheet = trim($sheetName ?? $this->getFirstSheetName());
             $safeSheetName = "'" . str_replace("'", "''", $targetSheet) . "'";
 
-            // 3. Xóa dữ liệu cũ của đúng cái Tab đó
             $this->service->spreadsheets_values->clear(
                 $this->spreadsheetId,
                 "{$safeSheetName}!A1:AC1000",
                 new \Google\Service\Sheets\ClearValuesRequest()
             );
 
-            // 4. Chuẩn bị dữ liệu để ghi
             $body = new \Google\Service\Sheets\ValueRange(['values' => $values]);
-
-            // 5. Ráp tên Sheet đã bọc nháy vào Range mới
             $fullRange = "{$safeSheetName}!{$range}";
 
             return $this->service->spreadsheets_values->update(
@@ -151,80 +212,96 @@ class GoogleSheetService
                 $body,
                 ['valueInputOption' => 'RAW']
             );
+        } catch (\Google\Service\Exception $e) {
+            Log::error('Google Sheets API Error - Update Sheet', [
+                'error' => $e->getMessage(),
+                'range' => $range,
+                'sheet' => $sheetName
+            ]);
+            throw new \Exception('Failed to update data in Google Sheets: ' . $e->getMessage());
         } catch (\Exception $e) {
-            // Log lỗi chi tiết để kiểm tra
-            \Log::error("Google Sheets API Error: " . $e->getMessage() . " | Sheet: " . $targetSheet);
+            Log::error('Unexpected error in updateSheet', [
+                'error' => $e->getMessage(),
+                'sheet' => $sheetName
+            ]);
             throw $e;
         }
     }
 
     // ==========================================
     // TÍNH NĂNG: UPSERT (Tự động tìm ID để Update hoặc Append nếu mới)
-    // Áp dụng cho mọi loại Resource (Account, Tracker, Payout...)
     // ==========================================
     public function upsertRows(array $dataRows, ?string $sheetName = null)
     {
-        $targetSheet = $sheetName ?? $this->getFirstSheetName();
-        $safeSheetName = "'" . str_replace("'", "''", $targetSheet) . "'";
+        try {
+            $targetSheet = $sheetName ?? $this->getFirstSheetName();
+            $safeSheetName = "'" . str_replace("'", "''", $targetSheet) . "'";
 
-        // 1. Đọc cột A để lấy danh sách ID đang có trên Sheet
-        $existingIds = $this->readSheet('A1:AC', $targetSheet);
+            $existingIds = $this->readSheet('A1:AC', $targetSheet);
 
-        $idMap = [];
-        if (!empty($existingIds)) {
-            foreach ($existingIds as $index => $row) {
-                if (isset($row[0]) && trim($row[0]) !== '') {
-                    // Tạo bản đồ: [ID => Số hàng trên Google Sheet]
-                    $idMap[(string)$row[0]] = $index + 1;
+            $idMap = [];
+            if (!empty($existingIds)) {
+                foreach ($existingIds as $index => $row) {
+                    if (isset($row[0]) && trim($row[0]) !== '') {
+                        $idMap[(string)$row[0]] = $index + 1;
+                    }
                 }
             }
-        }
 
-        $updateData = [];
-        $appendData = [];
+            $updateData = [];
+            $appendData = [];
 
-        // 2. Phân loại: Dòng nào cần Update, dòng nào cần Thêm mới
-        foreach ($dataRows as $rowData) {
-            $row = array_values((array)$rowData);
-            $id = (string)$row[0]; // ID luôn nằm ở cột đầu tiên
+            foreach ($dataRows as $rowData) {
+                $row = array_values((array)$rowData);
+                $id = (string)$row[0];
 
-            if (isset($idMap[$id])) {
-                // Nếu ID đã tồn tại -> Update đúng hàng đó
-                $rowNumber = $idMap[$id];
-                $updateData[] = new \Google\Service\Sheets\ValueRange([
-                    'range' => "{$safeSheetName}!A{$rowNumber}",
-                    'values' => [$row]
-                ]);
-            } else {
-                // Nếu ID chưa có -> Thêm vào danh sách Append
-                $appendData[] = $row;
+                if (isset($idMap[$id])) {
+                    $rowNumber = $idMap[$id];
+                    $updateData[] = new \Google\Service\Sheets\ValueRange([
+                        'range' => "{$safeSheetName}!A{$rowNumber}",
+                        'values' => [$row]
+                    ]);
+                } else {
+                    $appendData[] = $row;
+                }
             }
-        }
 
-        // 3. Thực hiện Update hàng loạt (Batch Update) - Cực nhanh và tiết kiệm API
-        if (!empty($updateData)) {
-            $batchRequest = new \Google\Service\Sheets\BatchUpdateValuesRequest([
-                'valueInputOption' => 'RAW',
-                'data' => $updateData
+            if (!empty($updateData)) {
+                $batchRequest = new \Google\Service\Sheets\BatchUpdateValuesRequest([
+                    'valueInputOption' => 'RAW',
+                    'data' => $updateData
+                ]);
+                $this->service->spreadsheets_values->batchUpdate($this->spreadsheetId, $batchRequest);
+            }
+
+            if (!empty($appendData)) {
+                $body = new \Google\Service\Sheets\ValueRange(['values' => $appendData]);
+                $this->service->spreadsheets_values->append(
+                    $this->spreadsheetId,
+                    "{$safeSheetName}!A1",
+                    $body,
+                    ['valueInputOption' => 'RAW']
+                );
+            }
+
+            return [
+                'updated' => count($updateData),
+                'appended' => count($appendData)
+            ];
+        } catch (\Google\Service\Exception $e) {
+            Log::error('Google Sheets API Error - Upsert Rows', [
+                'error' => $e->getMessage(),
+                'row_count' => count($dataRows),
+                'sheet' => $sheetName
             ]);
-            $this->service->spreadsheets_values->batchUpdate($this->spreadsheetId, $batchRequest);
+            throw new \Exception('Failed to upsert data to Google Sheets: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Unexpected error in upsertRows', [
+                'error' => $e->getMessage(),
+                'sheet' => $sheetName
+            ]);
+            throw $e;
         }
-
-        // 4. Thực hiện Append các dòng mới vào cuối Sheet
-        if (!empty($appendData)) {
-            $body = new \Google\Service\Sheets\ValueRange(['values' => $appendData]);
-            $this->service->spreadsheets_values->append(
-                $this->spreadsheetId,
-                "{$safeSheetName}!A1",
-                $body,
-                ['valueInputOption' => 'RAW']
-            );
-        }
-
-        return [
-            'updated' => count($updateData),
-            'appended' => count($appendData)
-        ];
     }
 
     // ==========================================
@@ -277,53 +354,78 @@ class GoogleSheetService
     public function deleteRowsByIds(array $ids, ?string $sheetName = null)
     {
         if (empty($ids)) return;
-        $targetSheet = $sheetName ?? $this->getFirstSheetName();
 
-        $spreadsheet = $this->service->spreadsheets->get($this->spreadsheetId);
-        $sheetId = null;
-        foreach ($spreadsheet->getSheets() as $sheet) {
-            if ($sheet->getProperties()->getTitle() == $targetSheet) {
-                $sheetId = $sheet->getProperties()->getSheetId();
-                break;
-            }
-        }
+        try {
+            $targetSheet = $sheetName ?? $this->getFirstSheetName();
 
-        if ($sheetId === null) return;
-
-        $existingData = $this->readSheet('A1:AC', $targetSheet);
-        $indicesToDelete = [];
-
-        if (!empty($existingData)) {
-            foreach ($existingData as $index => $row) {
-                if (isset($row[0]) && in_array((string)$row[0], $ids)) {
-                    $indicesToDelete[] = $index;
+            $spreadsheet = $this->service->spreadsheets->get($this->spreadsheetId);
+            $sheetId = null;
+            foreach ($spreadsheet->getSheets() as $sheet) {
+                if ($sheet->getProperties()->getTitle() == $targetSheet) {
+                    $sheetId = $sheet->getProperties()->getSheetId();
+                    break;
                 }
             }
-        }
 
-        if (empty($indicesToDelete)) return;
+            if ($sheetId === null) return;
 
-        rsort($indicesToDelete);
+            $existingData = $this->readSheet('A1:AC', $targetSheet);
+            $indicesToDelete = [];
 
-        $requests = [];
-        foreach ($indicesToDelete as $rowIndex) {
-            $requests[] = new \Google\Service\Sheets\Request([
-                'deleteDimension' => [
-                    'range' => [
-                        'sheetId' => $sheetId,
-                        'dimension' => 'ROWS',
-                        'startIndex' => $rowIndex,
-                        'endIndex' => $rowIndex + 1
+            if (!empty($existingData)) {
+                foreach ($existingData as $index => $row) {
+                    if (isset($row[0]) && in_array((string)$row[0], $ids)) {
+                        $indicesToDelete[] = $index;
+                    }
+                }
+            }
+
+            if (empty($indicesToDelete)) return;
+
+            // Xếp giảm dần để khi xóa dòng dưới không làm thay đổi index của dòng trên
+            rsort($indicesToDelete);
+
+            $requests = [];
+            foreach ($indicesToDelete as $rowIndex) {
+                $requests[] = new \Google\Service\Sheets\Request([
+                    'deleteDimension' => [
+                        'range' => [
+                            'sheetId' => $sheetId,
+                            'dimension' => 'ROWS',
+                            'startIndex' => $rowIndex,
+                            'endIndex' => $rowIndex + 1
+                        ]
                     ]
-                ]
+                ]);
+            }
+
+            $batchUpdateRequest = new \Google\Service\Sheets\BatchUpdateSpreadsheetRequest([
+                'requests' => $requests
             ]);
+
+            $result = $this->service->spreadsheets->batchUpdate($this->spreadsheetId, $batchUpdateRequest);
+
+            Log::info('Successfully deleted rows from Google Sheets', [
+                'sheet' => $targetSheet,
+                'deleted_count' => count($indicesToDelete)
+            ]);
+
+            return $result;
+        } catch (\Google\Service\Exception $e) {
+            Log::error('Google Sheets API Error - Delete Rows', [
+                'error' => $e->getMessage(),
+                'ids_to_delete' => $ids,
+                'sheet' => $sheetName
+            ]);
+            throw new \Exception('Failed to delete rows from Google Sheets: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Unexpected error in deleteRowsByIds', [
+                'error' => $e->getMessage(),
+                'ids_to_delete' => $ids,
+                'sheet' => $sheetName
+            ]);
+            throw $e;
         }
-
-        $batchUpdateRequest = new \Google\Service\Sheets\BatchUpdateSpreadsheetRequest([
-            'requests' => $requests
-        ]);
-
-        return $this->service->spreadsheets->batchUpdate($this->spreadsheetId, $batchUpdateRequest);
     }
 
     // ==========================================
@@ -338,12 +440,32 @@ class GoogleSheetService
             $response = $this->service->spreadsheets_values->get($this->spreadsheetId, $fullRange);
             $values = $response->getValues();
 
+            Log::info('Successfully read data from Google Sheets', [
+                'sheet' => $targetSheet,
+                'range' => $range,
+                'row_count' => count($values ?? [])
+            ]);
+
             return $values ?: [];
+        } catch (\Google\Service\Exception $e) {
+            Log::error('Google Sheets API Error - Read Sheet', [
+                'error' => $e->getMessage(),
+                'sheet' => $sheetName,
+                'range' => $range
+            ]);
+            throw new \Exception('Failed to read data from Google Sheets: ' . $e->getMessage());
         } catch (\Exception $e) {
-            \Log::error("Google Sheet Error: " . $e->getMessage());
-            return null;
+            Log::error('Unexpected error in readSheet', [
+                'error' => $e->getMessage(),
+                'sheet' => $sheetName,
+                'range' => $range
+            ]);
+            throw $e;
         }
     }
+
+    // ==========================================
+
 
     // Trả về Service gốc để gọi lệnh BatchUpdate
     public function getService()
