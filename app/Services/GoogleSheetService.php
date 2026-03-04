@@ -231,7 +231,7 @@ class GoogleSheetService
     // ==========================================
     // TÍNH NĂNG: UPSERT (Tự động tìm ID để Update hoặc Append nếu mới)
     // ==========================================
-    public function upsertRows(array $dataRows, ?string $sheetName = null)
+    public function upsertRows(array $dataRows, ?string $sheetName = null, array $headers = [])
     {
         try {
             $targetSheet = $sheetName ?? $this->getFirstSheetName();
@@ -558,3 +558,4 @@ class GoogleSheetService
 
     // ==========================================
 }
+
