@@ -117,7 +117,7 @@ php artisan make:filament-user
 ### Step 1: Create Google Cloud Project
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (e.g., "Yuni-Legend")
+2. Create a new project (e.g., "RebateOps")
 3. Enable **Google Sheets API**:
    - Navigate to "APIs & Services" → "Library"
    - Search for "Google Sheets API"
@@ -128,8 +128,8 @@ php artisan make:filament-user
 1. Go to "IAM & Admin" → "Service Accounts"
 2. Click "Create Service Account"
 3. Enter details:
-   - Name: `yuni-sheets-service`
-   - Description: `Service account for Yuni Legend Google Sheets integration`
+   - Name: `rebate-ops-service`
+   - Description: `Service account for RebateOps Google Sheets integration`
 4. Click "Create and Continue"
 5. Skip the optional steps and click "Done"
 
@@ -222,7 +222,7 @@ npm run dev
 ## 📁 Project Structure
 
 ```
-yuni-legend/
+RebateOps/
 ├── app/
 │   ├── Filament/           # Admin panel resources
 │   │   ├── Resources/      # CRUD resources
