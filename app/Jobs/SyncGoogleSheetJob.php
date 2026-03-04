@@ -29,6 +29,7 @@ class SyncGoogleSheetJob implements ShouldQueue
         if ($this->action === 'delete') {
         $service->deleteRowsByIds([(string)$this->recordId], $targetTabs);
         return;
+}
     }
         try {
             // 1. Tìm bản ghi cụ thể
