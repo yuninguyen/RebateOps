@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\RebateTracker;
 use App\Services\GoogleSheetService;
+use App\Jobs\SyncGoogleSheetJob;
 
 class RebateTrackerObserver
 {
