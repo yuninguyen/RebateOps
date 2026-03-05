@@ -32,6 +32,7 @@ class Account extends Model
     protected $casts = [
         // Lưu ý: Nếu cột status trong DB là JSON/Text thì để 'array', 
         // nhưng nếu là string (active/banned) thì nên bỏ dòng này.
+        'password' => 'encrypted',
         'status' => 'array',
         'paypal_linked_at' => 'date',
         'account_created_at' => 'date',

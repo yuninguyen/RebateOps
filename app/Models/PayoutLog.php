@@ -38,6 +38,12 @@ class PayoutLog extends Model
         'note',
     ];
 
+        protected $casts = [
+        'gc_code' => 'encrypted',
+        'gc_pin' => 'encrypted',
+    ];
+
+
     protected static function booted()
     {
 

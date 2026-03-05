@@ -9,10 +9,6 @@ class Email extends Model
 {
     public $timestamps = false; // Tắt tự động cập nhật created_at và updated_at
 
-    protected $casts = [
-        'email_created_at' => 'date',
-    ];
-
     // Cho phép lưu các cột này vào database
     protected $fillable = [
         'status',
@@ -20,9 +16,15 @@ class Email extends Model
         'email_password',
         'recovery_email',
         'two_factor_code',
-        'email_created_at',   
+        'email_created_at',
         'note',
         'provider',
+    ];
+
+    protected $casts = [
+        'email_password'   => 'encrypted',
+        'two_factor_code'  => 'encrypted',
+        'email_created_at' => 'date',
     ];
 
     protected static function booted()

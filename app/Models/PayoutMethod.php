@@ -43,6 +43,15 @@ class PayoutMethod extends Model
         'is_active', // 🟢 Thêm dòng này để điều khiển được công tắc bật/tắt
     ];
 
+    protected $casts = [
+        'password' => 'encrypted',
+        'paypal_password' => 'encrypted',
+        'ssn' => 'encrypted',
+        'auth_code' => 'encrypted',
+        'answer_1' => 'encrypted',
+        'answer_2' => 'encrypted',
+    ];
+
     // Quan hệ với bảng Logs (để sau này tính toán số dư)
     public function payoutLogs(): HasMany
     {
