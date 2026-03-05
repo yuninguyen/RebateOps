@@ -36,6 +36,17 @@ class RebateTrackerResource extends Resource
     protected static ?string $navigationGroup = 'WORKING SPACE';
     protected static ?string $navigationIcon = 'heroicon-o-presentation-chart-line';
 
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        // Nếu là Admin -> Cho xem tất cả mọi thứ (Sử dụng logic từ Model User)
+        if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return $query;
+        } // Nếu là Staff bình thường -> Chỉ cho xem Account
+    }
+
     public static function getRelations(): array
     {
         return [

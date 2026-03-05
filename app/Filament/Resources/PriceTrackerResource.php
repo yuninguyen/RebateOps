@@ -33,12 +33,23 @@ class PriceTrackerResource extends Resource
     // THÊM DÒNG NÀY: Đổi đường dẫn URL thành /price
     protected static ?string $slug = 'price-tracker';
 
-    // HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Rakuten
+// HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Price + Áp dụng phân quyền
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->whereHas('account', function ($query) {
-            $query->where('platform', 'Price.com');
+        // 1. Lớp lọc mặc định: LUÔN LUÔN chỉ lấy dữ liệu của Price
+        $query = parent::getEloquentQuery()->whereHas('account', function ($query) {
+            $query->where('platform', 'TopCasPricehback');
         });
+
+        $user = auth()->user();
+
+        // 2. Nếu là Admin -> Cho phép xem toàn bộ danh sách Price
+        if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return $query;
+        }
+
+        // 3. Nếu là Staff bình thường -> Chỉ xem Price do chính họ tạo/quản lý
+        return $query->where('user_id', auth()->id());
     }
 
     public static function getRelations(): array

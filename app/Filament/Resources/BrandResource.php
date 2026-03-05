@@ -23,6 +23,12 @@ class BrandResource extends Resource
     protected static ?int $navigationSort = 7;
     protected static ?string $navigationLabel = 'Brands'; // Cho hiện đầu tiên trong nhóm
 
+    // 🟢 CHỈ ADMIN MỚI THẤY VÀ TRUY CẬP ĐƯỢC MENU NÀY
+    public static function canViewAny(): bool
+    {
+        $user = auth()->user();
+        return $user && method_exists($user, 'isAdmin') && $user->isAdmin();
+    }
 
     public static function form(Form $form): Form
     {

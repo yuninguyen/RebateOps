@@ -38,6 +38,17 @@ class PayoutMethodResource extends Resource
     protected static ?string $navigationLabel = 'Payout Method';
     protected static ?int $navigationSort = 1;
 
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        // Nếu là Admin -> Cho xem tất cả mọi thứ (Sử dụng logic từ Model User)
+        if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return $query;
+        } // Nếu là Staff bình thường -> Chỉ cho xem Account
+    }
+
     // 🟢 QUY TẮC 1: HEADER DUY NHẤT
     public static array $payoutMethodHeaders = [
         'ID',

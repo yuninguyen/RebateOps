@@ -101,11 +101,11 @@ trait HasAccountSchema
                                     ->placeholder('Nhập mã 2FA hoặc mã khôi phục...'),
                                 Forms\Components\Select::make('status')
                                     ->label('Status')
-                                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                                    ->options([
                                         'active' => 'Live',
                                         'disabled' => 'Disabled',
                                         'locked' => 'Locked',
-                                    })
+                                    ])
                                     ->default('active')
                                     ->required()
                                     ->native(false),
@@ -141,7 +141,7 @@ trait HasAccountSchema
 
                         Forms\Components\Select::make('status')
                             ->multiple() // Cho phép chọn nhiều cái cùng lúc
-                            ->formatStateUsing(fn(string $state): string => match ($state) {
+                            ->options([
                                 'active' => 'Active',
                                 'used' => 'In Use',
                                 'banned' => 'Banned',
@@ -150,7 +150,7 @@ trait HasAccountSchema
                                 'limited' => 'PayPal Limited',
                                 'linked' => 'Linked PayPal',
                                 'unlinked' => 'Unlinked PayPal',
-                            })
+                            ])
                             ->searchable()
                             ->preload()
                             ->native(false), // Dùng giao diện hiện đại của Filament

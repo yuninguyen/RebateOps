@@ -33,12 +33,23 @@ class RakutenTrackerResource extends Resource
     // THÊM DÒNG NÀY: Đổi đường dẫn URL từ /rakutens thành /rakuten
     protected static ?string $slug = 'rakuten-tracker';
 
-    // HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Rakuten
+// HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Rakuten + Áp dụng phân quyền
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->whereHas('account', function ($query) {
+        // 1. Lớp lọc mặc định: LUÔN LUÔN chỉ lấy dữ liệu của Rakuten
+        $query = parent::getEloquentQuery()->whereHas('account', function ($query) {
             $query->where('platform', 'Rakuten');
         });
+
+        $user = auth()->user();
+
+        // 2. Nếu là Admin -> Cho phép xem toàn bộ danh sách Rakuten
+        if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return $query;
+        }
+
+        // 3. Nếu là Staff bình thường -> Chỉ xem Rakuten do chính họ tạo/quản lý
+        return $query->where('user_id', auth()->id());
     }
 
     public static function getRelations(): array

@@ -42,6 +42,11 @@ class PayoutLog extends Model
         'note',
     ];
 
+    protected $casts = [
+        'gc_code' => 'encrypted',
+        'gc_pin'  => 'encrypted',
+    ];
+
     
     // Cấu hình theo dõi toàn bộ các cột được phép điền
     public function getActivitylogOptions(): LogOptions

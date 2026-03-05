@@ -29,6 +29,17 @@ class PayoutLogResource extends Resource
     protected static ?string $navigationLabel = 'Payout Logs';
     protected static ?int $navigationSort = 2;
 
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        // Nếu là Admin -> Cho xem tất cả mọi thứ (Sử dụng logic từ Model User)
+        if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return $query;
+        } // Nếu là Staff bình thường -> Chỉ cho xem Account
+    }
+
     /**
      * 🟢 QUY TẮC 1: TIÊU ĐỀ DUY NHẤT TẠI ĐÂY
      */
@@ -404,10 +415,10 @@ class PayoutLogResource extends Resource
                         // CHỌN ASSET
                         Forms\Components\Select::make('asset_type')
                             ->label('Asset Type')
-                            ->formatStateUsing(fn(string $state): string => match ($state) {
+                            ->options([
                                 'paypal' => 'PayPal',
                                 'gift_card' => 'Gift Card',
-                            })
+                            ])
                             ->required()
                             ->live()
                             ->afterStateUpdated(function ($state, $set) {
@@ -567,11 +578,11 @@ class PayoutLogResource extends Resource
                             ->live(),
 
                         Forms\Components\Select::make('status')
-                            ->formatStateUsing(fn(string $state): string => match ($state) {
+                            ->options([
                                 'pending' => 'Pending',
                                 'completed' => 'Completed',
                                 'rejected' => 'Rejected',
-                            })
+                            ])
                             ->required()
                             ->default('pending'),
 
@@ -824,7 +835,7 @@ class PayoutLogResource extends Resource
                     ->iconPosition('after')
                     // 🟢 DESCRIPTION: Chỉ hiện dòng hướng dẫn cho Gift Card
                     //->description(fn($record) => $record->asset_type === 'gift_card' ? 'Click to copy full info' : null)
-                    ->searchable(['gc_code', 'gc_brand']),
+                    ->searchable('gc_brand'),
 
                 Tables\Columns\TextColumn::make('transaction_type')
                     ->label('Transaction Type')

@@ -33,12 +33,23 @@ class ActiveJunkyTrackerResource extends Resource
     // THÊM DÒNG NÀY: Đổi đường dẫn URL thành /active-junky
     protected static ?string $slug = 'active-junky-trakcer';
 
-    // HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Rakuten
+// HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Active Junky + Áp dụng phân quyền
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->whereHas('account', function ($query) {
+        // 1. Lớp lọc mặc định: LUÔN LUÔN chỉ lấy dữ liệu của Active Junky
+        $query = parent::getEloquentQuery()->whereHas('account', function ($query) {
             $query->where('platform', 'Active Junky');
         });
+
+        $user = auth()->user();
+
+        // 2. Nếu là Admin -> Cho phép xem toàn bộ danh sách Active Junky
+        if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return $query;
+        }
+
+        // 3. Nếu là Staff bình thường -> Chỉ xem Active Junky do chính họ tạo/quản lý
+        return $query->where('user_id', auth()->id());
     }
 
 
