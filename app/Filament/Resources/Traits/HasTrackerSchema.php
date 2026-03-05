@@ -16,10 +16,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 trait HasTrackerSchema
 {
-    // FIX #8: Dùng chung $usStates từ HasUsStates thay vì khai báo lại ở đây.
-    // HasAccountSchema cũng dùng cùng trait này → chỉ cần sửa 1 chỗ duy nhất.
+    // FIX #8: $usStates được kế thừa từ HasUsStates — KHÔNG khai báo lại ở đây.
     use HasUsStates;
-    
+
     /**
      * Scope lọc các bản ghi đang ở trạng thái có thể rút tiền
      */
@@ -27,59 +26,6 @@ trait HasTrackerSchema
     {
         return $query->whereIn('status', ['pending', 'confirmed', 'Pending', 'Confirmed']);
     }
-
-    public static array $usStates = [
-        'AL' => 'Alabama',
-        'AK' => 'Alaska',
-        'AZ' => 'Arizona',
-        'AR' => 'Arkansas',
-        'CA' => 'California',
-        'CO' => 'Colorado',
-        'CT' => 'Connecticut',
-        'DE' => 'Delaware',
-        'FL' => 'Florida',
-        'GA' => 'Georgia',
-        'HI' => 'Hawaii',
-        'ID' => 'Idaho',
-        'IL' => 'Illinois',
-        'IN' => 'Indiana',
-        'IA' => 'Iowa',
-        'KS' => 'Kansas',
-        'KY' => 'Kentucky',
-        'LA' => 'Louisiana',
-        'ME' => 'Maine',
-        'MD' => 'Maryland',
-        'MA' => 'Massachusetts',
-        'MI' => 'Michigan',
-        'MN' => 'Minnesota',
-        'MS' => 'Mississippi',
-        'MO' => 'Missouri',
-        'MT' => 'Montana',
-        'NE' => 'Nebraska',
-        'NV' => 'Nevada',
-        'NH' => 'New Hampshire',
-        'NJ' => 'New Jersey',
-        'NM' => 'New Mexico',
-        'NY' => 'New York',
-        'NC' => 'North Carolina',
-        'ND' => 'North Dakota',
-        'OH' => 'Ohio',
-        'OK' => 'Oklahoma',
-        'OR' => 'Oregon',
-        'PA' => 'Pennsylvania',
-        'RI' => 'Rhode Island',
-        'SC' => 'South Carolina',
-        'SD' => 'South Dakota',
-        'TN' => 'Tennessee',
-        'TX' => 'Texas',
-        'UT' => 'Utah',
-        'VT' => 'Vermont',
-        'VA' => 'Virginia',
-        'WA' => 'Washington',
-        'WV' => 'West Virginia',
-        'WI' => 'Wisconsin',
-        'WY' => 'Wyoming'
-    ];
 
     public static function form(Form $form): Form
     {
@@ -985,13 +931,23 @@ trait HasTrackerSchema
                         ->color('success')
                         ->requiresConfirmation()
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
-                            // ✅ SAU: 1 query DB + groupBy platform + 1 lần upsertRows mỗi tab
-\App\Models\RebateTracker::whereIn('id', $ids)->update(['status' => 'confirmed']); // 1 query
-$grouped = $records->groupBy(fn($r) => $r->account?->platform ?: 'General');
-foreach ($grouped as $platform => $items) {
-    $sheetService->upsertRows($rows, 'All_Rebate_Tracker', static::$trackerHeaders);     // 1 API call
-    $sheetService->upsertRows($rows, ucfirst($platform).'_Tracker', static::$trackerHeaders); // 1 API call
-}
+                            // FIX: khai báo $ids trước, 1 query UPDATE thay vì N lần
+                            $ids = $records->modelKeys();
+                            \App\Models\RebateTracker::whereIn('id', $ids)->update(['status' => 'confirmed']);
+
+                            // Reload với relations để formatRecordForSheet() hoạt động đúng
+                            $fresh = \App\Models\RebateTracker::with(['account.email', 'user'])
+                                ->whereIn('id', $ids)->get();
+
+                            $sheetService = app(\App\Services\GoogleSheetService::class);
+                            $grouped = $fresh->groupBy(fn($r) => $r->account?->platform ?: 'General');
+
+                            foreach ($grouped as $platform => $items) {
+                                $rows = $items->map(fn($r) => static::formatRecordForSheet($r))->values()->toArray();
+                                $sheetService->upsertRows($rows, 'All_Rebate_Tracker', static::$trackerHeaders);
+                                $sheetService->upsertRows($rows, ucfirst($platform) . '_Tracker', static::$trackerHeaders);
+                            }
+
                             \Filament\Notifications\Notification::make()->title('Updated & synchronized!')->success()->send();
                         }),
 
@@ -1001,13 +957,23 @@ foreach ($grouped as $platform => $items) {
                         ->icon('heroicon-o-clock')
                         ->color('info')
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
-                            // ✅ SAU: 1 query DB + groupBy platform + 1 lần upsertRows mỗi tab
-\App\Models\RebateTracker::whereIn('id', $ids)->update(['status' => 'pending']); // 1 query
-$grouped = $records->groupBy(fn($r) => $r->account?->platform ?: 'General');
-foreach ($grouped as $platform => $items) {
-    $sheetService->upsertRows($rows, 'All_Rebate_Tracker', static::$trackerHeaders);     // 1 API call
-    $sheetService->upsertRows($rows, ucfirst($platform).'_Tracker', static::$trackerHeaders); // 1 API call
-}
+                            // FIX: khai báo $ids trước, 1 query UPDATE thay vì N lần
+                            $ids = $records->modelKeys();
+                            \App\Models\RebateTracker::whereIn('id', $ids)->update(['status' => 'pending']);
+
+                            // Reload với relations để formatRecordForSheet() hoạt động đúng
+                            $fresh = \App\Models\RebateTracker::with(['account.email', 'user'])
+                                ->whereIn('id', $ids)->get();
+
+                            $sheetService = app(\App\Services\GoogleSheetService::class);
+                            $grouped = $fresh->groupBy(fn($r) => $r->account?->platform ?: 'General');
+
+                            foreach ($grouped as $platform => $items) {
+                                $rows = $items->map(fn($r) => static::formatRecordForSheet($r))->values()->toArray();
+                                $sheetService->upsertRows($rows, 'All_Rebate_Tracker', static::$trackerHeaders);
+                                $sheetService->upsertRows($rows, ucfirst($platform) . '_Tracker', static::$trackerHeaders);
+                            }
+
                             \Filament\Notifications\Notification::make()->title('Updated & synchronized!')->success()->send();
                         }),
 
@@ -1096,14 +1062,10 @@ foreach ($grouped as $platform => $items) {
         ];
     }
 
-    public static function bootHasTrackerSchema()
-    {
-        static::saved(function ($model) {
-            // Bắn Job chạy ngầm cho cả 2 tab
-            \App\Jobs\SyncGoogleSheetJob::dispatch($model->id, get_class($model));
-        });
-    }
-
+    // =========================================================
+    // bootHasTrackerSchema ĐÃ XÓA (FIX #7):
+    // RebateTrackerObserver (đăng ký trong AppServiceProvider) đã xử lý
+    // created/updated/deleted → không cần boot thêm tránh double-dispatch.
     // =========================================================
 
     public static function syncSingleRecordToSheet($record): void
