@@ -19,6 +19,17 @@ use Filament\Tables\Columns\TextColumn;
 
 class UserPlatformMatrixTable extends BaseWidget
 {
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        // Nếu là Admin -> Cho xem tất cả mọi thứ (Sử dụng logic từ Model User)
+        if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return $query;
+        } // Nếu là Staff bình thường -> Chỉ cho xem Account
+    }
+
     protected int | string | array $columnSpan = 'full';
     protected static ?string $heading = 'Revenue Report by User & Platform';
 

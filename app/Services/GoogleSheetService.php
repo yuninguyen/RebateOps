@@ -17,9 +17,12 @@ class GoogleSheetService
     public function __construct()
     {
         try {
-            // Get configuration from config/services.php
+            // Lấy cấu hình ID
             $this->spreadsheetId = config('services.google.spreadsheet_id');
-            $authPath = config('services.google.service_account_path');
+
+            // 🟢 FIX: Dùng storage_path để luôn tạo ra đường dẫn tuyệt đối (Absolute Path)
+            // Dù cấu hình là gì, ta ép nó chọc thẳng vào thư mục storage/app/
+            $authPath = storage_path('app/google-auth.json');
 
             // Validate configuration
             if (empty($this->spreadsheetId)) {
@@ -27,7 +30,7 @@ class GoogleSheetService
             }
 
             if (!file_exists($authPath)) {
-                throw new \Exception("Google service account file not found.");
+                throw new \Exception("Google service account file not found at: " . $authPath);
             }
 
             // Initialize Google Client
@@ -309,16 +312,8 @@ class GoogleSheetService
     // ==========================================
     public function formatColumnsAsClip(string $sheetName, int $startColIndex, int $endColIndex)
     {
-        // 1. Lấy Sheet ID (ID dạng số của tab hiện tại, khác với Spreadsheet ID)
-        $spreadsheet = $this->service->spreadsheets->get($this->spreadsheetId);
-        $sheetId = null;
-        foreach ($spreadsheet->getSheets() as $sheet) {
-            if ($sheet->getProperties()->getTitle() == $sheetName) {
-                $sheetId = $sheet->getProperties()->getSheetId();
-                break;
-            }
-        }
-
+        // 🟢 FIX N+1: Lấy ID từ Cache cực nhanh
+        $sheetId = $this->getSheetIdByName($sheetName);
         if ($sheetId === null) return;
 
         // 2. Tạo Request ép định dạng WrapStrategy thành CLIP
@@ -358,15 +353,8 @@ class GoogleSheetService
         try {
             $targetSheet = $sheetName ?? $this->getFirstSheetName();
 
-            $spreadsheet = $this->service->spreadsheets->get($this->spreadsheetId);
-            $sheetId = null;
-            foreach ($spreadsheet->getSheets() as $sheet) {
-                if ($sheet->getProperties()->getTitle() == $targetSheet) {
-                    $sheetId = $sheet->getProperties()->getSheetId();
-                    break;
-                }
-            }
-
+            // 🟢 FIX N+1: Lấy ID từ Cache cực nhanh
+            $sheetId = $this->getSheetIdByName($targetSheet);
             if ($sheetId === null) return;
 
             $existingData = $this->readSheet('A1:AC', $targetSheet);
@@ -482,33 +470,30 @@ class GoogleSheetService
     // Hàm kiểm tra và tự tạo Tab nếu chưa có
     public function createSheetIfNotExist(string $sheetName)
     {
-        $spreadsheet = $this->service->spreadsheets->get($this->spreadsheetId);
-        $sheets = $spreadsheet->getSheets();
+        // 🟢 Đọc từ Cache thay vì gọi API
+        $sheets = $this->getCachedSheetInfo();
 
-        foreach ($sheets as $sheet) {
-            if ($sheet->getProperties()->getTitle() === $sheetName) {
-                return; // Đã tồn tại, thoát ra
-            }
+        if (array_key_exists($sheetName, $sheets)) {
+            return; // Đã tồn tại, thoát ra
         }
 
         // Nếu chưa có, gửi lệnh tạo mới
         $body = new \Google\Service\Sheets\BatchUpdateSpreadsheetRequest([
             'requests' => [
                 new \Google\Service\Sheets\Request([
-                    'addSheet' => [
-                        'properties' => ['title' => $sheetName]
-                    ]
+                    'addSheet' => ['properties' => ['title' => $sheetName]]
                 ])
             ]
         ]);
 
         $this->service->spreadsheets->batchUpdate($this->spreadsheetId, $body);
+
+        // 🟢 QUAN TRỌNG: Vừa tạo Tab mới xong thì phải đập bỏ Cache cũ để nó lấy lại danh sách mới
+        \Illuminate\Support\Facades\Cache::forget('sheet_info_' . $this->spreadsheetId);
     }
 
     /**
      * Tự động tô màu cả hàng dựa trên giá trị của cột Status
-     */
-    /**
      * Tô màu theo quy tắc linh hoạt
      * $rules: Mảng chứa [ 'Tên trạng thái' => [màu RGB] ]
      */
@@ -538,6 +523,24 @@ class GoogleSheetService
 
         $batchUpdateRequest = new \Google\Service\Sheets\BatchUpdateSpreadsheetRequest(['requests' => $requests]);
         return $this->service->spreadsheets->batchUpdate($this->spreadsheetId, $batchUpdateRequest);
+    }
+
+    /**
+     * 🟢 HÀM MỚI: Lấy danh sách Sheet lưu vào Cache 60 phút
+     */
+    private function getCachedSheetInfo()
+    {
+        $cacheKey = 'sheet_info_' . $this->spreadsheetId;
+
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 3600, function () {
+            $spreadsheet = $this->service->spreadsheets->get($this->spreadsheetId);
+            $info = [];
+            foreach ($spreadsheet->getSheets() as $sheet) {
+                // Lưu thành mảng: ['Tên Tab' => ID_Của_Tab]
+                $info[$sheet->getProperties()->getTitle()] = $sheet->getProperties()->getSheetId();
+            }
+            return $info;
+        });
     }
 
     /**

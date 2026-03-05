@@ -14,7 +14,7 @@ class EditPayoutLog extends EditRecord
     protected function afterSave(): void
     {
         // Cứ lưu xong là "bộ não" ở Resource tự quét lại và đẩy lên Sheet
-        PayoutLogResource::syncToGoogleSheet();
+        // PayoutLogResource::syncToGoogleSheet();
     }
 
     protected function getRedirectUrl(): string

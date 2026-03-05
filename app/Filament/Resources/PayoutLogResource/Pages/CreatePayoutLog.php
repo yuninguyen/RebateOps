@@ -14,7 +14,7 @@ class CreatePayoutLog extends CreateRecord
     protected function afterSave(): void
     {
         // Gọi hàm "bộ não" từ Resource
-        PayoutLogResource::syncToGoogleSheet();
+        //PayoutLogResource::syncToGoogleSheet();
     }
 
     protected function getRedirectUrl(): string

@@ -12,8 +12,9 @@ class PayoutStats extends BaseWidget
     // 1. Phải khai báo biến này ở đây để lưu trữ ID User khi nhận được từ Table
     public ?int $selectedUserId = null;
 
-    // Cập nhật dữ liệu mỗi 10 giây (tùy chọn)
-    protected static ?string $pollingInterval = '10s';
+    // 🟢 Đổi từ '10s' thành null để tắt Polling. 
+    // Data sẽ cập nhật khi User F5 hoặc có tương tác.
+    protected static ?string $pollingInterval = null;
 
     // Thêm hiệu ứng làm mờ khi đang tải (Loading state)
     protected static bool $isLazy = false;

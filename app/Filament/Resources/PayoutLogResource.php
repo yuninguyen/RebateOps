@@ -639,7 +639,7 @@ class PayoutLogResource extends Resource
                             ->label('Exchange Rate')
                             ->prefix('1$ =')
                             ->placeholder('Eg: 20000')
-                            ->mask('99.999') // 🟢 Tự động thêm dấu chấm vào vị trí thứ 3
+                            //->mask('99.999') // 🟢 Tự động thêm dấu chấm vào vị trí thứ 3
                             ->suffix('VNĐ/$')
                             // CHỈ HIỆN KHI LÀ LIQUIDATION
                             ->visible(fn($get) => $get('transaction_type') === 'liquidation')
