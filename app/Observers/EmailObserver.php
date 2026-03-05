@@ -7,7 +7,6 @@ use App\Jobs\SyncGoogleSheetJob;
 
 class EmailObserver
 {
-    // app/Observers/EmailObserver.php
     public function saved(Email $email): void
     {
         // Gọi Job đa năng để cập nhật dòng Email này lên Sheet
@@ -20,5 +19,3 @@ class EmailObserver
         \App\Jobs\SyncGoogleSheetJob::dispatch($email->id, \App\Models\Email::class, 'delete');
     }
 }
-
-// --- KẾT THÚC ---

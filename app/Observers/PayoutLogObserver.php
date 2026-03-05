@@ -10,13 +10,6 @@ use Illuminate\Support\Facades\Log;
 
 class PayoutLogObserver implements ShouldHandleEventsAfterCommit
 {
-    protected $sheetService;
-
-    public function __construct(GoogleSheetService $sheetService)
-    {
-        $this->sheetService = $sheetService;
-    }
-
     /**
      * Sự kiện SAVED: Chạy sau khi bản ghi được Lưu (cả Create và Update)
      */
