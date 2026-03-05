@@ -33,63 +33,9 @@ use function Livewire\wrap;
 trait HasAccountSchema
 {
 
-    public static array $usStates = [
-        'AL' => 'Alabama',
-        'AK' => 'Alaska',
-        'AZ' => 'Arizona',
-        'AR' => 'Arkansas',
-        'CA' => 'California',
-        'CO' => 'Colorado',
-        'CT' => 'Connecticut',
-        'DE' => 'Delaware',
-        'FL' => 'Florida',
-        'GA' => 'Georgia',
-        'HI' => 'Hawaii',
-        'ID' => 'Idaho',
-        'IL' => 'Illinois',
-        'IN' => 'Indiana',
-        'IA' => 'Iowa',
-        'KS' => 'Kansas',
-        'KY' => 'Kentucky',
-        'LA' => 'Louisiana',
-        'ME' => 'Maine',
-        'MD' => 'Maryland',
-        'MA' => 'Massachusetts',
-        'MI' => 'Michigan',
-        'MN' => 'Minnesota',
-        'MS' => 'Mississippi',
-        'MO' => 'Missouri',
-        'MT' => 'Montana',
-        'NE' => 'Nebraska',
-        'NV' => 'Nevada',
-        'NH' => 'New Hampshire',
-        'NJ' => 'New Jersey',
-        'NM' => 'New Mexico',
-        'NY' => 'New York',
-        'NC' => 'North Carolina',
-        'ND' => 'North Dakota',
-        'OH' => 'Ohio',
-        'OK' => 'Oklahoma',
-        'OR' => 'Oregon',
-        'PA' => 'Pennsylvania',
-        'RI' => 'Rhode Island',
-        'SC' => 'South Carolina',
-        'SD' => 'South Dakota',
-        'TN' => 'Tennessee',
-        'TX' => 'Texas',
-        'UT' => 'Utah',
-        'VT' => 'Vermont',
-        'VA' => 'Virginia',
-        'WA' => 'Washington',
-        'WV' => 'West Virginia',
-        'WI' => 'Wisconsin',
-        'WY' => 'Wyoming',
-        'DC' => 'District of Columbia',
-        'PR' => 'Puerto Rico',
-        'VI' => 'Virgin Islands',
-        'Other' => 'Other'
-    ];
-
+    // Dùng chung $usStates từ HasUsStates thay vì khai báo lại ở đây.
+    use HasUsStates;
+    
     public static function form(Form $form): Form
     {
         return $form
@@ -892,8 +838,8 @@ trait HasAccountSchema
                                 "Email Note: {$emailNote}\n" .
                                 "--------------------------\n" .
                                 "SOURCE & PLATFORM:\n" .
-                                "Platform: {$record->platform}\n" .
-                                "Platform Password: {$record->password}\n" .
+                                "Platform: {$platform}\n" .
+                                "Platform Password: {$platformPass}\n" .
                                 "State: {$stateName}\n" .
                                 "Device Create: {$device}\n" .
                                 "Date Create: {$platformDateCreated}\n" .
