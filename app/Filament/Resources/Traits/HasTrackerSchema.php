@@ -871,7 +871,7 @@ trait HasTrackerSchema
 
                             $targetTabs = [
                                 'All_Rebate_Tracker',
-                                $platform . '_Tracker',
+                                ucfirst($platform) . '_Tracker', // FIX #2: ucfirst
                             ];
 
                             foreach ($targetTabs as $tab) {
@@ -901,20 +901,22 @@ trait HasTrackerSchema
                             $groupedRecords = $records->groupBy(fn($record) => $record->account?->platform ?: 'General');
 
                             foreach ($groupedRecords as $platform => $group) {
-                                $rows = $group->map(fn($record) => static::formatRecordForSheet($record))->toArray();
-                                $targetTab = $platform . '_Tracker';
+                                $rows = $group->map(fn($record) => static::formatRecordForSheet($record))->values()->toArray();
+                                // FIX #2: ucfirst để đúng tên tab (Rakuten_Tracker, không phải rakuten_Tracker)
+                                $targetTab = ucfirst($platform) . '_Tracker';
 
-                                // Sync vào Tab riêng
-                                $sheetService->upsertRows($rows, $targetTab);
-                                $sheetService->formatColumnsAsClip($targetTab, 5, 6);   // Note Email
-                                $sheetService->formatColumnsAsClip($targetTab, 15, 16); // Note Platform
-                                $sheetService->formatColumnsAsClip($targetTab, 18, 19); // Personal Info
+                                // FIX #3: truyền $headers để tab mới có hàng tiêu đề
+                                $sheetService->createSheetIfNotExist($targetTab);
+                                $sheetService->upsertRows($rows, $targetTab, static::$trackerHeaders);
+                                $sheetService->formatColumnsAsClip($targetTab, 5, 6);
+                                $sheetService->formatColumnsAsClip($targetTab, 15, 16);
+                                $sheetService->formatColumnsAsClip($targetTab, 18, 19);
 
                                 // Sync vào Tab tổng
-                                $sheetService->upsertRows($rows, 'All_Rebate_Tracker');
-                                $sheetService->formatColumnsAsClip('All_Rebate_Tracker', 5, 6);   // Note Email
-                                $sheetService->formatColumnsAsClip('All_Rebate_Tracker', 15, 16); // Note Platform
-                                $sheetService->formatColumnsAsClip('All_Rebate_Tracker', 18, 19); // Personal Info
+                                $sheetService->upsertRows($rows, 'All_Rebate_Tracker', static::$trackerHeaders);
+                                $sheetService->formatColumnsAsClip('All_Rebate_Tracker', 5, 6);
+                                $sheetService->formatColumnsAsClip('All_Rebate_Tracker', 15, 16);
+                                $sheetService->formatColumnsAsClip('All_Rebate_Tracker', 18, 19);
                             }
 
                             \Filament\Notifications\Notification::make()
@@ -1078,7 +1080,7 @@ trait HasTrackerSchema
         // Tên Tab dựa trên Platform + Tracker (Ví dụ: Rakuten_Tracker)
 
         $sheetService->upsertRows([$row], 'All_Rebate_Tracker', static::$trackerHeaders);
-        $sheetService->upsertRows([$row], $platform . '_Tracker', static::$trackerHeaders);
+        $sheetService->upsertRows([$row], ucfirst($platform) . '_Tracker', static::$trackerHeaders); // FIX #2: ucfirst
     }
 
 

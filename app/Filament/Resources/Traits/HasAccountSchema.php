@@ -737,20 +737,24 @@ trait HasAccountSchema
                         ->successNotificationTitle('Added successfully!'),
 
                     Tables\Actions\EditAction::make()
-                        ->label('Edit'),
+                        ->label('Edit')
+                        ->after(function ($record) {
+                            // FIX #1: Account không có Observer → phải sync thủ công sau Edit
+                            static::syncSingleAccountToSheet($record);
+                        }),
                     Tables\Actions\DeleteAction::make()
                         ->after(function ($record) {
                             $sheetService = app(\App\Services\GoogleSheetService::class);
 
-                            // Xác định đúng Tab: Ví dụ Rakuten_Accounts
-                            $targetTab = $record->platform . '_Accounts';
+                            // FIX #4: thêm ucfirst + null fallback → đúng tên tab
+                            $targetTab = ucfirst($record->platform ?: 'General') . '_Accounts';
 
                             // Thực hiện xóa dòng dựa trên ID (Cột A)
                             $sheetService->deleteRowsByIds([(string)$record->id], $targetTab);
 
                             \Filament\Notifications\Notification::make()
                                 ->title('Account deleted from Google Sheet!')
-                                ->warning() // Màu vàng cảnh báo cho hành động xóa
+                                ->warning()
                                 ->send();
                         }),
 
@@ -1121,7 +1125,7 @@ trait HasAccountSchema
 
         // 🟢 CẢI TIẾN: Nếu platform rỗng, dùng 'General' thay vì để nó ra '_Accounts'
         $platform = $record->platform ?: 'General';
-        $targetTab = $platform . '_Accounts';
+        $targetTab = ucfirst($platform) . '_Accounts'; // FIX #2: ucfirst để đúng tên tab
 
         // 2. Gọi hàm mới: Tìm ID ở cột A và ghi đè đúng hàng đó
         // Truyền vào mảng [$row] vì hàm upsertRows nhận danh sách các hàng
