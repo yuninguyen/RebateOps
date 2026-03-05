@@ -25,6 +25,8 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Actions\BulkAction;
 use Illuminate\Database\Eloquent\Collection;
 use Filament\Navigation\NavigationItem;
+use App\Filament\Traits\HasUsStates;
+
 
 use function Livewire\wrap;
 
@@ -33,63 +35,9 @@ use function Livewire\wrap;
 trait HasAccountSchema
 {
 
-    public static array $usStates = [
-        'AL' => 'Alabama',
-        'AK' => 'Alaska',
-        'AZ' => 'Arizona',
-        'AR' => 'Arkansas',
-        'CA' => 'California',
-        'CO' => 'Colorado',
-        'CT' => 'Connecticut',
-        'DE' => 'Delaware',
-        'FL' => 'Florida',
-        'GA' => 'Georgia',
-        'HI' => 'Hawaii',
-        'ID' => 'Idaho',
-        'IL' => 'Illinois',
-        'IN' => 'Indiana',
-        'IA' => 'Iowa',
-        'KS' => 'Kansas',
-        'KY' => 'Kentucky',
-        'LA' => 'Louisiana',
-        'ME' => 'Maine',
-        'MD' => 'Maryland',
-        'MA' => 'Massachusetts',
-        'MI' => 'Michigan',
-        'MN' => 'Minnesota',
-        'MS' => 'Mississippi',
-        'MO' => 'Missouri',
-        'MT' => 'Montana',
-        'NE' => 'Nebraska',
-        'NV' => 'Nevada',
-        'NH' => 'New Hampshire',
-        'NJ' => 'New Jersey',
-        'NM' => 'New Mexico',
-        'NY' => 'New York',
-        'NC' => 'North Carolina',
-        'ND' => 'North Dakota',
-        'OH' => 'Ohio',
-        'OK' => 'Oklahoma',
-        'OR' => 'Oregon',
-        'PA' => 'Pennsylvania',
-        'RI' => 'Rhode Island',
-        'SC' => 'South Carolina',
-        'SD' => 'South Dakota',
-        'TN' => 'Tennessee',
-        'TX' => 'Texas',
-        'UT' => 'Utah',
-        'VT' => 'Vermont',
-        'VA' => 'Virginia',
-        'WA' => 'Washington',
-        'WV' => 'West Virginia',
-        'WI' => 'Wisconsin',
-        'WY' => 'Wyoming',
-        'DC' => 'District of Columbia',
-        'PR' => 'Puerto Rico',
-        'VI' => 'Virgin Islands',
-        'Other' => 'Other'
-    ];
-
+    // Dùng chung $usStates từ HasUsStates thay vì khai báo lại ở đây.
+    use HasUsStates;
+    
     public static function form(Form $form): Form
     {
         return $form
@@ -790,23 +738,8 @@ trait HasAccountSchema
                         })
                         ->successNotificationTitle('Added successfully!'),
 
-                    Tables\Actions\EditAction::make()
-                        ->label('Edit'),
-                    Tables\Actions\DeleteAction::make()
-                        ->after(function ($record) {
-                            $sheetService = app(\App\Services\GoogleSheetService::class);
-
-                            // Xác định đúng Tab: Ví dụ Rakuten_Accounts
-                            $targetTab = $record->platform . '_Accounts';
-
-                            // Thực hiện xóa dòng dựa trên ID (Cột A)
-                            $sheetService->deleteRowsByIds([(string)$record->id], $targetTab);
-
-                            \Filament\Notifications\Notification::make()
-                                ->title('Account deleted from Google Sheet!')
-                                ->warning() // Màu vàng cảnh báo cho hành động xóa
-                                ->send();
-                        }),
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
 
                     Tables\Actions\Action::make('copy_full_info')
                         ->label('Copy')
@@ -892,8 +825,8 @@ trait HasAccountSchema
                                 "Email Note: {$emailNote}\n" .
                                 "--------------------------\n" .
                                 "SOURCE & PLATFORM:\n" .
-                                "Platform: {$record->platform}\n" .
-                                "Platform Password: {$record->password}\n" .
+                                "Platform: {$platform}\n" .
+                                "Platform Password: {$platformPass}\n" .
                                 "State: {$stateName}\n" .
                                 "Device Create: {$device}\n" .
                                 "Date Create: {$platformDateCreated}\n" .
@@ -927,27 +860,40 @@ trait HasAccountSchema
                         ->icon('heroicon-o-table-cells')
                         ->color('success')
                         ->action(function (Collection $records) {
-                            $rows = [];
-                            foreach ($records as $record) {
-                                $rows[] = static::formatAccountForSheet($record);
-                            }
-
                             $sheetService = app(\App\Services\GoogleSheetService::class);
+                            // FIX: Nhóm theo platform trước, rồi upsert từng tab 1 lần.
+                            // Trước đây chỉ lấy platform của record đầu tiên → các platform khác bị đẩy sai tab.
+                            $grouped = $records->groupBy(fn($r) => $r->platform ?: 'General');
 
-                            // Xác định Tab (Lấy từ bản ghi đầu tiên trong danh sách chọn)
-                            $firstRecord = $records->first();
-                            $targetTab = $firstRecord->platform . '_Accounts';
+                            $totalUpdated  = 0;
+                            $totalAppended = 0;
 
-                            $result = $sheetService->upsertRows($rows, $targetTab);
+                            foreach ($grouped as $platform => $items) {
+                                $targetTab = ucfirst($platform) . '_Accounts';
 
-                            // Ép định dạng Clip
-                            $sheetService->formatColumnsAsClip($targetTab, 5, 6);   // Note Email (F)
-                            $sheetService->formatColumnsAsClip($targetTab, 14, 15); // Platform Note (O)
-                            $sheetService->formatColumnsAsClip($targetTab, 17, 18); // Personal Info (R)
+                                // Gom toàn bộ rows của platform này thành 1 mảng — 1 lần gọi API duy nhất
+                                $rows = $items
+                                    ->map(fn($r) => static::formatAccountForSheet($r))
+                                    ->values()
+                                    ->toArray();
+
+                                $sheetService->createSheetIfNotExist($targetTab);
+
+                                // FIX #3 (BulkAction): Truyền $headers để tab mới có hàng tiêu đề
+                                $result = $sheetService->upsertRows($rows, $targetTab, static::$accountHeaders);
+
+                                // Ép định dạng Clip
+                                $sheetService->formatColumnsAsClip($targetTab, 5, 6);   // Note Email (F)
+                                $sheetService->formatColumnsAsClip($targetTab, 14, 15); // Platform Note (O)
+                                $sheetService->formatColumnsAsClip($targetTab, 17, 18); // Personal Info (R)
+
+                                $totalUpdated  += $result['updated'];
+                                $totalAppended += $result['appended'];
+                            }
 
                             \Filament\Notifications\Notification::make()
                                 ->title('Accounts Synced!')
-                                ->body("Updated {$result['updated']} and added {$result['appended']} to {$targetTab}.")
+                                ->body("Updated {$totalUpdated}, Appended {$totalAppended} across " . $grouped->count() . ' tab(s).')
                                 ->success()
                                 ->send();
                         })
@@ -1163,7 +1109,7 @@ trait HasAccountSchema
 
         // 🟢 CẢI TIẾN: Nếu platform rỗng, dùng 'General' thay vì để nó ra '_Accounts'
         $platform = $record->platform ?: 'General';
-        $targetTab = $platform . '_Accounts';
+        $targetTab = ucfirst($platform) . '_Accounts'; // FIX #2: ucfirst để đúng tên tab
 
         // 2. Gọi hàm mới: Tìm ID ở cột A và ghi đè đúng hàng đó
         // Truyền vào mảng [$row] vì hàm upsertRows nhận danh sách các hàng
@@ -1177,11 +1123,8 @@ trait HasAccountSchema
         //$sheetService->formatColumnsAsClip($targetTab, 17, 18); // Personal Info (R)
     }
 
-    public static function bootHasAccountSchema()
-    {
-        static::saved(function ($model) {
-            // Tự động gọi hàm sync mỗi khi nhấn Save trên Filament
-            \App\Jobs\SyncGoogleSheetJob::dispatch($model->id, get_class($model));
-        });
-    }
+    // bootHasAccountSchema ĐÃ XÓA (FIX #7):
+    // Sync Account lên Sheet được thực hiện qua Observer hoặc gọi trực tiếp
+    // syncSingleAccountToSheet() trong action. Không dùng boot() để tránh
+    // double-dispatch nếu sau này thêm AccountObserver.
 }

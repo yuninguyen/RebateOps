@@ -15,87 +15,129 @@ class SyncGoogleSheetJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * @param int $recordId ID của bản ghi cần sync
-     * @param string $modelClass Tên Class của Model (vd: PayoutLog::class)
+     * @param int         $recordId   ID của bản ghi cần sync
+     * @param string      $modelClass Tên Class của Model
+     * @param string      $action     'upsert' hoặc 'delete'
+     * @param string|null $platform   Platform lưu kèm để dùng khi delete
+     *                                (record đã xóa khỏi DB nên không query được)
      */
     public function __construct(
         protected $recordId,
-        protected $modelClass
+        protected $modelClass,
+        protected string $action = 'upsert',
+        protected ?string $platform = null   // FIX #6: lưu platform vào job
     ) {}
 
     public function handle(GoogleSheetService $service): void
     {
         try {
-            // 1. Tìm bản ghi cụ thể
-            $record = $this->modelClass::find($this->recordId);
-            if (!$record) return;
-
-            $headers = [];
+            $headers      = [];
             $formattedRow = [];
-            $targetTab = []; // Chuyển thành mảng để xử lý đa luồng
+            $targetTabs   = [];
 
-            // 2. MAPPING: Xác định Resource và Tab dựa trên Model Class
+            // ── 1. DELETE: dùng platform đã lưu trong constructor ──
+            if ($this->action === 'delete') {
+                switch ($this->modelClass) {
+                    case \App\Models\Email::class:
+                        $targetTabs = ['Emails'];
+                        break;
+
+                    case \App\Models\Account::class:
+                        // FIX #6: dùng platform đã lưu thay vì fallback General
+                        $p = $this->platform ? ucfirst($this->platform) : 'General';
+                        $targetTabs = [$p . '_Accounts'];
+                        break;
+
+                    case \App\Models\RebateTracker::class:
+                        // FIX #6: xóa cả tab tổng lẫn tab platform
+                        $p = $this->platform ? ucfirst($this->platform) : null;
+                        $targetTabs = ['All_Rebate_Tracker'];
+                        if ($p) $targetTabs[] = $p . '_Tracker';
+                        break;
+
+                    case \App\Models\PayoutLog::class:
+                        $targetTabs = ['Payout_Logs'];
+                        break;
+
+                    case \App\Models\PayoutMethod::class:
+                        $targetTabs = ['Payout_Methods'];
+                        break;
+                }
+
+                foreach ($targetTabs as $tabName) {
+                    $service->deleteRowsByIds([(string)$this->recordId], $tabName);
+                }
+                return;
+            }
+
+            // ── 2. Tìm bản ghi kèm relations ──
+            $record = $this->getRecordWithRelations();
+
+            if (!$record) {
+                Log::warning("SyncGoogleSheetJob: Record not found [{$this->modelClass} #{$this->recordId}]");
+                return;
+            }
+
+            // ── 3. MAPPING ──
             switch ($this->modelClass) {
                 case \App\Models\Email::class:
-                    // EmailResource sử dụng Trait HasEmailSchema
-                    $resource = \App\Filament\Resources\EmailResource::class;
+                    $resource     = \App\Filament\Resources\EmailResource::class;
                     $targetTabs[] = 'Emails';
-                    $headers = $resource::$emailHeaders;
+                    $headers      = $resource::$emailHeaders;
                     $formattedRow = $resource::formatEmailForSheet($record);
                     break;
 
                 case \App\Models\Account::class:
-                    $platform = $record->platform ?: 'General';
-                    $targetTabs[] = ucfirst($platform) . '_Accounts';
-                    $headers = \App\Filament\Resources\AccountResource::$accountHeaders; // Hoặc từ Trait
+                    $platform     = $record->platform ?: 'General';
+                    $targetTabs[] = ucfirst($platform) . '_Accounts'; // FIX #2: ucfirst
+                    $headers      = \App\Filament\Resources\AccountResource::$accountHeaders;
                     $formattedRow = \App\Filament\Resources\AccountResource::formatAccountForSheet($record);
                     break;
 
                 case \App\Models\RebateTracker::class:
-                    $platform = $record->account?->platform ?: 'General';
-                    $targetTabs = ['All_Rebate_Tracker', ucfirst($platform) . '_Tracker'];
-                    $headers = \App\Filament\Resources\RebateTrackerResource::$trackerHeaders;
+                    $platform   = $record->account?->platform ?: 'General';
+                    $targetTabs = ['All_Rebate_Tracker', ucfirst($platform) . '_Tracker']; // FIX #2: ucfirst
+                    $headers    = \App\Filament\Resources\RebateTrackerResource::$trackerHeaders;
                     $formattedRow = \App\Filament\Resources\RebateTrackerResource::formatRecordForSheet($record);
                     break;
 
                 case \App\Models\PayoutLog::class:
-                    $resource = \App\Filament\Resources\PayoutLogResource::class;
+                    $resource     = \App\Filament\Resources\PayoutLogResource::class;
                     $targetTabs[] = 'Payout_Logs';
-                    $headers = $resource::$payoutLogHeaders;
+                    $headers      = $resource::$payoutLogHeaders;
                     $formattedRow = $resource::formatPayoutLogForSheet($record);
                     break;
 
                 case \App\Models\PayoutMethod::class:
-                    $resource = \App\Filament\Resources\PayoutMethodResource::class;
+                    $resource     = \App\Filament\Resources\PayoutMethodResource::class;
                     $targetTabs[] = 'Payout_Methods';
-                    $headers = $resource::$payoutMethodHeaders;
+                    $headers      = $resource::$payoutMethodHeaders;
                     $formattedRow = $resource::formatPayoutMethodForSheet($record);
                     break;
+
+                default:
+                    Log::warning("SyncGoogleSheetJob: Unhandled modelClass [{$this->modelClass}]");
+                    return;
             }
 
-            // 3. Thực hiện UPSERT (Chỉ cập nhật đúng 1 dòng này)
+            // ── 4. UPSERT ──
             if (!empty($targetTabs) && !empty($formattedRow)) {
                 foreach ($targetTabs as $tabName) {
-                $service->createSheetIfNotExist($tabName);
-
-                // upsertRows sẽ tự chèn Header nếu Sheet trống và update nếu trùng ID
-                $service->upsertRows([$formattedRow], $tabName, $headers);
-
-                // 4. ÁP DỤNG ĐỊNH DẠNG RIÊNG CHO TỪNG TAB
-                $this->applySpecificFormatting($service, $tabName);
-            }
+                    $service->createSheetIfNotExist($tabName);
+                    $service->upsertRows([$formattedRow], $tabName, $headers);
+                    $this->applySpecificFormatting($service, $tabName);
+                }
             }
         } catch (\Exception $e) {
-            Log::error("Google Sheet Job Error [{$this->modelClass} ID: {$this->recordId}]: " . $e->getMessage());
+            Log::error("SyncGoogleSheetJob Error [{$this->modelClass} #{$this->recordId}]: " . $e->getMessage());
+            throw $e;
         }
     }
 
-    /**
-     * Tự động load các quan hệ cần thiết tùy theo loại Model
-     */
     protected function getRecordWithRelations()
     {
         $query = $this->modelClass::query();
+
         if ($this->modelClass === \App\Models\Account::class) {
             $query->with(['email', 'user']);
         } elseif ($this->modelClass === \App\Models\RebateTracker::class) {
@@ -103,45 +145,38 @@ class SyncGoogleSheetJob implements ShouldQueue
         } elseif ($this->modelClass === \App\Models\PayoutLog::class) {
             $query->with(['account.email', 'payoutMethod']);
         }
+
         return $query->find($this->recordId);
     }
 
-    /**
-     * Tự động định dạng (màu sắc, thu gọn cột) sau khi Sync xong 1 dòng
-     */
-    protected function applySpecificFormatting(GoogleSheetService $service, string $tabName)
+    protected function applySpecificFormatting(GoogleSheetService $service, string $tabName): void
     {
-        // Định dạng cho Payout Logs
         if ($tabName === 'Payout_Logs') {
-            $service->formatColumnsAsClip($tabName, 16, 17); // Status, Note
+            $service->formatColumnsAsClip($tabName, 16, 17);
 
-            // Định dạng cho Payout Methods
         } elseif ($tabName === 'Payout_Methods') {
-            $service->formatColumnsAsClip($tabName, 4, 8); // Credentials
-            $service->formatColumnsAsClip($tabName, 25, 26); // Note
+            $service->formatColumnsAsClip($tabName, 4, 8);
+            $service->formatColumnsAsClip($tabName, 25, 26);
             $service->applyFormattingWithRules($tabName, 24, [
                 'Limited' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],
             ]);
 
-            // Định dạng cho Emails
         } elseif ($tabName === 'Emails') {
-            $service->formatColumnsAsClip($tabName, 2, 3); // Email & Pass
+            $service->formatColumnsAsClip($tabName, 2, 3);
             $service->applyFormattingWithRules($tabName, 1, [
-                'Live' => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
-                'Disabled' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],
+                'Live'     => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
+                'Disabled' => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],
             ]);
 
-            // Định dạng cho các tab Accounts
         } elseif (str_ends_with($tabName, '_Accounts')) {
-            $service->formatColumnsAsClip($tabName, 5, 6);   // Note Email (F)
-            $service->formatColumnsAsClip($tabName, 14, 15); // Platform Note (O)
-            $service->formatColumnsAsClip($tabName, 17, 18); // Personal Info (R)
+            $service->formatColumnsAsClip($tabName, 5, 6);
+            $service->formatColumnsAsClip($tabName, 14, 15);
+            $service->formatColumnsAsClip($tabName, 17, 18);
 
-            // Định dạng cho các tab Tracker
         } elseif (str_contains($tabName, '_Tracker')) {
-            $service->formatColumnsAsClip($tabName, 5, 6);   // Note Email
-            $service->formatColumnsAsClip($tabName, 15, 16); // Note Platform
-            $service->formatColumnsAsClip($tabName, 18, 19); // Personal Info
+            $service->formatColumnsAsClip($tabName, 5, 6);
+            $service->formatColumnsAsClip($tabName, 15, 16);
+            $service->formatColumnsAsClip($tabName, 18, 19);
         }
     }
 }

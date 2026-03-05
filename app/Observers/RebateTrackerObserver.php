@@ -3,41 +3,26 @@
 namespace App\Observers;
 
 use App\Models\RebateTracker;
-use App\Services\GoogleSheetService;
+use App\Jobs\SyncGoogleSheetJob;
 
 class RebateTrackerObserver
 {
-    protected GoogleSheetService $sheetService;
+    // FIX #7: Xóa inject GoogleSheetService (không dùng, tốn khởi tạo Google API client)
 
-    // Tiêm (Inject) Service vào để dùng
-    public function __construct(GoogleSheetService $sheetService)
-    {
-        $this->sheetService = $sheetService;
-    }
-
-    // Hàm này tự chạy khi một RebateTracker mới được tạo ra
     public function created(RebateTracker $tracker): void
     {
-        // Lấy dữ liệu (Bạn có thể điều chỉnh lại tên cột cho khớp với DB của bạn)
-        $userName = $tracker->user->name ?? 'N/A';
-        $platformName = $tracker->account->platform ?? 'N/A'; // Lấy platform từ account liên kết
+        SyncGoogleSheetJob::dispatch($tracker->id, get_class($tracker));
+    }
 
-        $data = [
-            $tracker->id,
-            $userName,
-            $platformName,
-            $tracker->rebate_amount,
-            $tracker->status,
-            $tracker->created_at->format('Y-m-d H:i:s'),
-        ];
+    public function updated(RebateTracker $tracker): void
+    {
+        SyncGoogleSheetJob::dispatch($tracker->id, get_class($tracker));
+    }
 
-        // Đẩy lên tab có tên là 'All_Rebate_Tracker' (Tham số thứ 2)
-        $this->sheetService->appendRow($data, 'All_Rebate_Tracker');
-        $this->sheetService->appendRow($data, 'Rakuten_Tracker');
-        $this->sheetService->appendRow($data, 'RetailMeNot_Tracker');
-        $this->sheetService->appendRow($data, 'JoinHoney_Tracker');
-        $this->sheetService->appendRow($data, 'ActiveJunky_Tracker');
-        $this->sheetService->appendRow($data, 'TopCashback_Tracker');
-        $this->sheetService->appendRow($data, 'Price_Tracker');
+    public function deleted(RebateTracker $tracker): void
+    {
+        // FIX #6: truyền platform để Job biết xóa đúng tab platform_Tracker
+        $platform = $tracker->account?->platform ?: null;
+        SyncGoogleSheetJob::dispatch($tracker->id, get_class($tracker), 'delete', $platform);
     }
 }
