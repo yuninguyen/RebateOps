@@ -106,14 +106,14 @@ class BrandResource extends Resource
                 // 1. LỌC THEO PLATFORM (Quan trọng nhất)
                 Tables\Filters\SelectFilter::make('platform')
                     ->label('Filter by Platform')
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                    ->options([
                         'Rakuten' => 'Rakuten',
                         'RetailMeNot' => 'RetailMeNot',
                         'JoinHoney' => 'Join Honey',
                         'Price' => 'Price.com',
                         'TopCashback' => 'TopCashback',
                         'ActiveJunky' => 'Active Junky',
-                    })
+                    ])
                     ->searchable(), // Cho phép gõ tìm platform nếu danh sách dài
 
                 // 2. LỌC THEO TRẠNG THÁI BOOST (Thẻ có thưởng vs Thẻ không thưởng)

@@ -25,7 +25,7 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Actions\BulkAction;
 use Illuminate\Database\Eloquent\Collection;
 use Filament\Navigation\NavigationItem;
-use App\Filament\Traits\HasUsStates;
+use App\Filament\Resources\Traits\HasUsStates;
 
 
 use function Livewire\wrap;
@@ -37,7 +37,7 @@ trait HasAccountSchema
 
     // Dùng chung $usStates từ HasUsStates thay vì khai báo lại ở đây.
     use HasUsStates;
-    
+
     public static function form(Form $form): Form
     {
         return $form
@@ -554,10 +554,10 @@ trait HasAccountSchema
                 // Thêm bộ lọc Sắp xếp
                 Tables\Filters\SelectFilter::make('sort_by')
                     ->label('Sort Order')
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                    ->options([
                         'newest' => 'Newest First', // Mới nhất đến cũ
                         'oldest' => 'Oldest First', // Cũ nhất đến mới
-                    })
+                    ])
                     ->placeholder('Default')
                     ->query(function ($query, array $data) {
                         if ($data['value'] === 'newest') {
@@ -570,11 +570,11 @@ trait HasAccountSchema
                 // Lọc theo Status Email
                 SelectFilter::make('email_status')
                     ->label('Email Status')
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                    ->options([
                         'active' => 'Live',
                         'disabled' => 'Disabled',
                         'locked' => 'Locked',
-                    })
+                    ])
                     ->query(fn($query, $data) => $query->when(
                         $data['value'],
                         fn($q, $value) => $q->whereHas('email', fn($q) => $q->where('status', $value))

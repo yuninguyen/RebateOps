@@ -933,11 +933,11 @@ class PayoutLogResource extends Resource
                 // 1. LỌC THEO TRẠNG THÁI (STATUS)
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Filter by Status')
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                    ->options([
                         'pending' => 'Pending',
                         'completed' => 'Completed',
                         'rejected' => 'Rejected',
-                    }),
+                    ]),
 
                 // 2. LỌC THEO THỜI GIAN (TỪ NGÀY - ĐẾN NGÀY)
                 Tables\Filters\Filter::make('created_at')
