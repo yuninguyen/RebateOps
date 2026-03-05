@@ -77,10 +77,11 @@ class SyncAllToGoogleSheet extends Command
             foreach ($grouped as $platform => $items) {
                 $platformName = $platform ?: 'General';
                 $this->line("   -> Pushing tabs: " . ucfirst($platformName) . "_Accounts");
-                // Giả định bạn đã có hàm syncSingleAccountToSheet trong Trait
-                foreach ($items as $item) {
-                    \App\Filament\Resources\AccountResource::syncSingleAccountToSheet($item);
-                }
+                
+                // Sau: gom toàn bộ rows rồi gọi 1 lần duy nhất ✅
+$rows = $items->map(fn($item) => AccountResource::formatAccountForSheet($item))->toArray();
+$sheetService->upsertRows($rows, $tabName, AccountResource::$accountHeaders);
+// = 1 readSheet + 1 batchUpdate, dù có 100 accounts
             }
             $this->info("   ✔ Accounts done!");
         } catch (\Exception $e) {
