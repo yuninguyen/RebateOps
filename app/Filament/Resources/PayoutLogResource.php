@@ -684,10 +684,15 @@ class PayoutLogResource extends Resource
             ->recordUrl(null)    // Tắt URL navigation
             // 🟢 BƯỚC 1: Sửa lỗi ViewAction. Alias phải là 'payout_logs' để trùng với tên bảng gốc
             ->query(function () {
+                // 1. Đưa withCount vào thẳng subQuery bên trong
                 $subQuery = PayoutLog::query()
                     ->select('*')
-                    ->selectRaw('COALESCE(parent_id, id) as group_id');
-                return PayoutLog::query()->fromSub($subQuery, 'payout_logs'); // Alias bắt buộc là 'payout_logs'
+                    ->selectRaw('COALESCE(parent_id, id) as group_id')
+                    ->withCount('children'); // 🟢 CHUYỂN BÙA CHỐNG N+1 VÀO ĐÂY
+
+                // 2. Query bên ngoài chỉ việc gọi lại mà không bị lỗi Expression
+                return PayoutLog::query()
+                    ->fromSub($subQuery, 'payout_logs');
             })
 
             // 🟢 BƯỚC 2: Sửa từ code của bạn (Dùng group_id để không bao giờ bị lỗi NULL)
@@ -790,7 +795,6 @@ class PayoutLogResource extends Resource
                         $brand = $record->gc_brand ? ucfirst(str_replace('_', ' ', $record->gc_brand)) : 'N/A';
                         $code = $record->gc_code ?? '---';
                         $pin = $record->gc_pin ?? '---';
-                        $code = $record->gc_code ?? '---';
                         return "
                                 <div style='display: inline-block; text-align: left; line-height: 1.7;'>
                                 <div style='margin-bottom: 4px;'>
@@ -834,15 +838,16 @@ class PayoutLogResource extends Resource
                     ->html()
                     // --- Description: Luôn hiện chữ Sell to VND cho dòng Withdrawal ---
                     ->description(function ($record): ?\Illuminate\Support\HtmlString {
-                        // 🟢 ĐIỀU KIỆN QUAN TRỌNG: Chỉ hiện nếu chưa có dòng con (chưa bán)
-                        if (in_array($record->transaction_type, ['withdrawal', 'hold']) && $record->children()->count() === 0) {
+                        // 🟢 FIX N+1: Dùng children_count thay vì children()->count()
+                        if (in_array($record->transaction_type, ['withdrawal', 'hold']) && $record->children_count === 0) {
                             return new \Illuminate\Support\HtmlString(
                                 '<span style="color: #FF9F40; font-weight: bold; cursor: pointer; display: block; margin-top: 4px;">$ Exchange to VND</span>'
                             );
                         }
 
                         // Nếu đã bán rồi, có thể hiện nhãn "Đã thanh khoản" màu xám nhẹ cho chuyên nghiệp
-                        if ($record->children()->count() > 0) {
+                        // 🟢 FIX N+1
+                        if ($record->children_count > 0) {
                             return new \Illuminate\Support\HtmlString(
                                 '<span style="color: #94a3b8; font-size: 11px;">(Exchanged!)</span>'
                             );
@@ -850,8 +855,8 @@ class PayoutLogResource extends Resource
                         return null;
                     })
                     ->extraAttributes(function ($record) {
-                        // 🟢 Chặn click nếu đã bán rồi
-                        if (in_array($record->transaction_type, ['withdrawal', 'hold']) && $record->children()->count() === 0) {
+                        // 🟢 FIX N+1: Chặn click nếu đã bán rồi
+                        if (in_array($record->transaction_type, ['withdrawal', 'hold']) && $record->children_count === 0) {
                             return [
                                 'class' => 'cursor-pointer transition hover:opacity-70',
                                 'wire:click.stop' => "mountTableAction('currency_exchange', '{$record->id}')",
