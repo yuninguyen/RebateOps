@@ -5,9 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\Traits\LogsActivity; // Bật tính năng Log
+use Spatie\Activitylog\LogOptions;          // Tùy chọn Log
 
 class PayoutMethod extends Model
 {
+    use LogsActivity; // Kích hoạt "máy quay" cho PayoutMethod
+
     use HasFactory;
 
     // Tên bảng trong Database (để chắc chắn không lệch)
@@ -51,6 +55,15 @@ class PayoutMethod extends Model
         'answer_1' => 'encrypted',
         'answer_2' => 'encrypted',
     ];
+
+    // Cấu hình theo dõi toàn bộ các cột được phép điền
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
 
     // Quan hệ với bảng Logs (để sau này tính toán số dư)
     public function payoutLogs(): HasMany

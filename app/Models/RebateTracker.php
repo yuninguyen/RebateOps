@@ -10,7 +10,7 @@ use Spatie\Activitylog\LogOptions;          // Tùy chọn Log
 class RebateTracker extends Model
 {
 
-    use LogsActivity; // Kích hoạt "máy quay"
+    use LogsActivity; // Kích hoạt "máy quay" cho RebateTracker
 
     protected $fillable = [
         'account_id',

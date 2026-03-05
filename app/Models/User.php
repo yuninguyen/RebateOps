@@ -7,9 +7,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
+use Spatie\Activitylog\Traits\LogsActivity; // Bật tính năng Log
+use Spatie\Activitylog\LogOptions;          // Tùy chọn Log
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
+    use LogsActivity; // Kích hoạt "máy quay" cho User
+
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
@@ -18,8 +24,20 @@ class User extends Authenticatable
      */
     public function accounts(): HasMany
     {
-        return $this->hasMany(Account::class, 'user_id'); 
+        return $this->hasMany(Account::class, 'user_id');
         // Đảm bảo 'user_id' là tên cột khóa ngoại trong bảng accounts
+    }
+    
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+    
+    // Thêm hàm này để khóa cổng Admin Panel
+    public function canAccessPanel(Panel $panel): bool
+    {
+        // Chỉ những ai có role là 'admin' hoặc 'staff' mới được vào trang quản trị
+        return $this->isAdmin() || $this->role === 'staff';
     }
 
     /**
@@ -56,5 +74,14 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    // Cấu hình theo dõi toàn bộ các cột được phép điền
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 }

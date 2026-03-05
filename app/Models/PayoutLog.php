@@ -6,9 +6,13 @@ use App\Models\Account;
 use App\Models\PayoutMethod;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\Traits\LogsActivity; // Bật tính năng Log
+use Spatie\Activitylog\LogOptions;          // Tùy chọn Log
 
 class PayoutLog extends Model
 {
+    use LogsActivity; // Kích hoạt máy quay cho PayoutLog
+
     protected $fillable = [
         // --- Các trường định danh ---
         'user_id',              // 🟢 MỚI: Người thực hiện giao dịch
@@ -38,10 +42,19 @@ class PayoutLog extends Model
         'note',
     ];
 
-        protected $casts = [
+    protected $casts = [
         'gc_code' => 'encrypted',
         'gc_pin' => 'encrypted',
     ];
+
+    // Cấu hình theo dõi toàn bộ các cột được phép điền
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
 
 
     protected static function booted()

@@ -4,9 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\Traits\LogsActivity; // Bật tính năng Log
+use Spatie\Activitylog\LogOptions;          // Tùy chọn Log
 
 class Email extends Model
 {
+    use LogsActivity; // Kích hoạt máy quay cho Email
+
     public $timestamps = false; // Tắt tự động cập nhật created_at và updated_at
 
     // Cho phép lưu các cột này vào database
@@ -50,5 +54,14 @@ class Email extends Model
     public function accounts(): HasMany
     {
         return $this->hasMany(Account::class);
+    }
+
+        // Cấu hình theo dõi toàn bộ các cột được phép điền
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 }

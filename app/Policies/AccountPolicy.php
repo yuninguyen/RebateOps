@@ -14,9 +14,19 @@ class AccountPolicy
      */
     private function isAdmin(User $user): bool
     {
-        return $user->email === 'yuninguyen.it@gmail.com'; 
+        return $user->email === 'admin'; 
     }
 
+    // Cấp toàn quyền cho Admin chặn trước mọi rules khác
+    public function before(User $user, string $ability): bool|null
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+        
+        return null; // Trả về null để nó tiếp tục xét các quyền bên dưới nếu không phải Admin
+    }
+    
     /**
      * Determine whether the user can view any models.
      * Ai cũng có thể xem danh sách tài khoản.
