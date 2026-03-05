@@ -3,21 +3,13 @@
 namespace App\Observers;
 
 use App\Models\RebateTracker;
-use App\Services\GoogleSheetService;
 use App\Jobs\SyncGoogleSheetJob;
 
 class RebateTrackerObserver
 {
-    protected GoogleSheetService $sheetService;
+    // FIX #7: Xóa inject GoogleSheetService (không dùng, tốn khởi tạo Google API client)
 
-    // Tiêm (Inject) Service vào để dùng
-    public function __construct(GoogleSheetService $sheetService)
-    {
-        $this->sheetService = $sheetService;
-    }
-
-    // Hàm này tự chạy khi một RebateTracker mới được tạo ra
-public function created(RebateTracker $tracker): void
+    public function created(RebateTracker $tracker): void
     {
         SyncGoogleSheetJob::dispatch($tracker->id, get_class($tracker));
     }
@@ -29,6 +21,8 @@ public function created(RebateTracker $tracker): void
 
     public function deleted(RebateTracker $tracker): void
     {
-        SyncGoogleSheetJob::dispatch($tracker->id, get_class($tracker), 'delete');
+        // FIX #6: truyền platform để Job biết xóa đúng tab platform_Tracker
+        $platform = $tracker->account?->platform ?: null;
+        SyncGoogleSheetJob::dispatch($tracker->id, get_class($tracker), 'delete', $platform);
     }
 }
