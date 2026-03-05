@@ -38,32 +38,9 @@ class PayoutLog extends Model
         'note',
     ];
 
-    protected static function booted()
-    {
-        // Logic đồng bộ Cha-Con & Google Sheets (Chạy mỗi khi nhấn Save/Create)
-        static::saved(function ($payoutLog) {
-            // KIỂM TRA: Nếu là dòng con (liquidation)
-            if ($payoutLog->transaction_type === 'liquidation' && $payoutLog->parent_id) {
-                $parent = $payoutLog->parent;
-
-                if ($parent) {
-                    // 🟢 A. CẬP NHẬT WEBSITE: Chỉ update cha khi tỷ giá hoặc tổng tiền ở con thay đổi
-                    if ($payoutLog->wasChanged(['exchange_rate', 'total_vnd']) || $payoutLog->wasRecentlyCreated) {
-                        $parent->updateQuietly([
-                            'exchange_rate' => $payoutLog->exchange_rate,
-                            'total_vnd' => $payoutLog->total_vnd,
-                        ]);
-
-                        // 🟢 B. SYNC GOOGLE SHEETS (Dòng Cha): Đẩy bản cập nhật của cha lên sheet
-                        // dispatch(new \App\Jobs\SyncPayoutToSheets($parent));
-                    }
-                }
-            }
-
-            // 🟢 C. SYNC GOOGLE SHEETS (Dòng hiện tại): Luôn đẩy dòng vừa thao tác lên sheet
-            // dispatch(new \App\Jobs\SyncPayoutToSheets($payoutLog));
-        });
-    }
+    // FIX: booted() đã được XÓA khỏi Model.
+    // Logic cập nhật parent (exchange_rate, total_vnd) được xử lý tập trung
+    // trong PayoutLogObserver::saved() — tránh chạy 2 lần mỗi khi save.
 
     public function user(): BelongsTo
     {
