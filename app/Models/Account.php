@@ -92,4 +92,9 @@ class Account extends Model
     {
         return $this->belongsTo(Email::class, 'email_id');
     }
+
+    public function payoutLogs()
+    {
+        return $this->hasMany(\App\Models\PayoutLog::class, 'account_id');
+    }
 }

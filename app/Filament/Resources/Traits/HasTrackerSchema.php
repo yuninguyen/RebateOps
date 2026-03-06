@@ -140,7 +140,7 @@ trait HasTrackerSchema
                                             ], 'rebate_amount')
                                             ->withSum([
                                                 'payoutLogs as paid_amount' => fn($q) => $q->whereIn('transaction_type', ['withdrawal', 'hold'])
-                                                                                         ->where('status', 'completed')
+                                                    ->where('status', 'completed')
                                             ], 'amount_usd')
                                             ->get()
                                             ->mapWithKeys(function ($account) {
@@ -938,63 +938,55 @@ trait HasTrackerSchema
                         })
                         ->deselectRecordsAfterCompletion(), // Tự động bỏ tick sau khi xuất xong
 
-                    // Nút đổi nhanh sang Confirmed
-                    Tables\Actions\BulkAction::make('markAsConfirmed')
-                        ->label('Set as Confirmed')
-                        ->icon('heroicon-o-check-badge')
-                        ->color('success')
-                        ->requiresConfirmation()
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
-                            // FIX: khai báo $ids trước, 1 query UPDATE thay vì N lần
-                            $ids = $records->modelKeys();
-                            \App\Models\RebateTracker::whereIn('id', $ids)->update(['status' => 'confirmed']);
 
-                            // Reload với relations để formatRecordForSheet() hoạt động đúng
-                            $fresh = \App\Models\RebateTracker::with(['account.email', 'user'])
-                                ->whereIn('id', $ids)->get();
-
-                            $sheetService = app(\App\Services\GoogleSheetService::class);
-                            $grouped = $fresh->groupBy(fn($r) => $r->account?->platform ?: 'General');
-
-                            foreach ($grouped as $platform => $items) {
-                                $rows = $items->map(fn($r) => static::formatRecordForSheet($r))->values()->toArray();
-                                $sheetService->upsertRows($rows, 'All_Rebate_Tracker', static::$trackerHeaders);
-                                $sheetService->upsertRows($rows, ucfirst($platform) . '_Tracker', static::$trackerHeaders);
-                            }
-
-                            \Filament\Notifications\Notification::make()->title('Updated & synchronized!')->success()->send();
-                        }),
 
                     // Nút đổi nhanh sang Pending
-                    Tables\Actions\BulkAction::make('markAsPending')
-                        ->label('Set as Pending')
-                        ->icon('heroicon-o-clock')
-                        ->color('info')
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
-                            // FIX: khai báo $ids trước, 1 query UPDATE thay vì N lần
-                            $ids = $records->modelKeys();
-                            \App\Models\RebateTracker::whereIn('id', $ids)->update(['status' => 'pending']);
-
-                            // Reload với relations để formatRecordForSheet() hoạt động đúng
-                            $fresh = \App\Models\RebateTracker::with(['account.email', 'user'])
-                                ->whereIn('id', $ids)->get();
-
-                            $sheetService = app(\App\Services\GoogleSheetService::class);
-                            $grouped = $fresh->groupBy(fn($r) => $r->account?->platform ?: 'General');
-
-                            foreach ($grouped as $platform => $items) {
-                                $rows = $items->map(fn($r) => static::formatRecordForSheet($r))->values()->toArray();
-                                $sheetService->upsertRows($rows, 'All_Rebate_Tracker', static::$trackerHeaders);
-                                $sheetService->upsertRows($rows, ucfirst($platform) . '_Tracker', static::$trackerHeaders);
-                            }
-
-                            \Filament\Notifications\Notification::make()->title('Updated & synchronized!')->success()->send();
-                        }),
+                    static::makeBulkStatusAction('pending', 'Mark as Pending', 'heroicon-o-clock', 'info'),
+                    // Nút đổi nhanh sang Confirme
+                    static::makeBulkStatusAction('confirmed', 'Mark as Confirmed', 'heroicon-o-check-badge', 'success'),
 
                     Tables\Actions\RestoreBulkAction::make(),     // 🟢 Khôi phục nhiều dòng
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * 🟢 HÀM GỘP: Xử lý đổi trạng thái và đồng bộ cho hàng loạt record
+     */
+    public static function bulkUpdateStatus(\Illuminate\Database\Eloquent\Collection $records, string $newStatus): void
+    {
+        $count = 0;
+        foreach ($records as $record) {
+            // Chỉ cập nhật nếu trạng thái thực sự thay đổi
+            if ($record->status !== $newStatus) {
+                $record->update(['status' => $newStatus]);
+                $count++;
+            }
+        }
+
+        // Thông báo thành công mượt mà góc màn hình
+        \Filament\Notifications\Notification::make()
+            ->title("Đã chuyển {$count} dòng thành " . ucfirst($newStatus))
+            ->success()
+            ->send();
+
+        // 💡 LƯU Ý: Chúng ta chỉ cần update DB.
+        // RebateTrackerObserver của bạn sẽ tự động "bắt" được sự thay đổi này 
+        // và tự động đẩy Job lên Google Sheets. Không cần viết lệnh gọi Sheet ở đây nữa!
+    }
+
+    /**
+     * 🟢 HÀM REFACTOR: Tự động sinh ra các nút Bulk Action đổi trạng thái
+     */
+    private static function makeBulkStatusAction(string $status, string $label, string $icon, string $color): Tables\Actions\BulkAction
+    {
+        return Tables\Actions\BulkAction::make('markAs' . ucfirst($status))
+            ->label($label)
+            ->icon($icon)
+            ->color($color)
+            ->requiresConfirmation()
+            ->action(fn(\Illuminate\Database\Eloquent\Collection $records) => static::bulkUpdateStatus($records, $status));
     }
 
     // =========================================================

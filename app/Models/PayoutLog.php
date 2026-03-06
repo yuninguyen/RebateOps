@@ -49,14 +49,6 @@ class PayoutLog extends Model
         'gc_pin'  => 'encrypted',
     ];
 
-    /**
-     * MỚI: Liên kết tài khoản này với các lịch sử rút tiền (Để tối ưu N+1 Query)
-     */
-    public function payoutLogs()
-    {
-        return $this->hasMany(\App\Models\PayoutLog::class, 'account_id');
-    }
-
     // Cấu hình theo dõi toàn bộ các cột được phép điền
     public function getActivitylogOptions(): LogOptions
     {

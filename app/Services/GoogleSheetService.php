@@ -277,6 +277,12 @@ class GoogleSheetService
                 $this->service->spreadsheets_values->batchUpdate($this->spreadsheetId, $batchRequest);
             }
 
+            // 🟢 FIX BUG THIẾU HEADER: 
+            // Nếu tab mới hoàn toàn (idMap rỗng), chèn Header lên đầu mảng dữ liệu chuẩn bị đẩy lên
+            if (!empty($headers) && empty($idMap)) {
+                array_unshift($appendData, $headers);
+            }
+
             if (!empty($appendData)) {
                 $body = new \Google\Service\Sheets\ValueRange(['values' => $appendData]);
                 $this->service->spreadsheets_values->append(
