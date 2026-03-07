@@ -32,28 +32,27 @@ class PayoutLogResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        // 1. Lấy query gốc (đã bao gồm xử lý SoftDeletes)
+        $query = parent::getEloquentQuery()
+            ->withCount('children');
 
-        // 1. Khóa chặt dòng Con luôn nằm ngay dưới dòng Cha tương ứng của nó
+        // 2. Khóa chặt thứ tự sắp xếp Cha - Con (Đã fix lỗi SQL Sum cho Sếp)
         $query->orderByRaw('COALESCE(parent_id, id) DESC')->orderBy('id', 'ASC');
-
-        // 🟢 THÊM LẠI DÒNG NÀY: Phục hồi bùa đếm dòng con để hiện chữ Exchanged!
-        $query->withCount('children');
 
         $user = auth()->user();
 
-        // 2. Nếu là Admin -> Cho xem tất cả
+        // 3. KIỂM TRA QUYỀN ADMIN (Sếp kiểm tra lại method isAdmin trong Model User nhé)
         if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {
             return $query;
         }
 
-        // 3. Chốt chặn cho Staff
-        return $query->where(function ($q) use ($user) {
-            $q->where('payout_logs.user_id', $user->id)
-                ->orWhereIn('payout_logs.parent_id', function ($subQuery) use ($user) {
-                    $subQuery->select('id')
-                        ->from('payout_logs')
-                        ->where('user_id', $user->id);
+        // 4. CHỐT CHẶN BẢO MẬT CHO STAFF
+        // Staff chỉ được thấy đơn do mình tạo HOẶC đơn con của đơn do mình tạo
+        return $query->where(function (Builder $q) use ($user) {
+            $q->where('user_id', $user->id) // Đơn do mình sở hữu
+                ->orWhereHas('parent', function ($parentQuery) use ($user) {
+                    // HOẶC đơn con mà đơn Cha của nó thuộc về mình
+                    $parentQuery->where('user_id', $user->id);
                 });
         });
     }
@@ -709,14 +708,14 @@ class PayoutLogResource extends Resource
             // Trong phần Table configuration
             ->recordAction(null) // Tắt click action
             ->recordUrl(null)    // Tắt URL navigation
-            // 🟢 BƯỚC 2: Sửa từ code của bạn (Dùng group_id để không bao giờ bị lỗi NULL)
-            /*->groups([
-                Tables\Grouping\Group::make('group_id')
-                    ->label('Original Transaction')
-                    ->getTitleFromRecordUsing(fn($record) => $record->parent_id ? "Original ID #" . $record->parent_id : "Original ID #" . $record->id)
-                    ->collapsible(),
+            // 🟢 1. NHÓM THEO ACCOUNT (Cột thật, không bao giờ lỗi Sum)
+            ->groups([
+                Tables\Grouping\Group::make('account_id')
+                    ->label('Account')
+                    ->collapsible()
+                    ->getTitleFromRecordUsing(fn($record) => $record->account?->email?->email ?? 'N/A'),
             ])
-            ->defaultGroup('group_id') */
+            ->defaultGroup('account_id')
 
             // 🟢 BƯỚC 3: Hiệu ứng thụt lề và đổi màu cho dòng con (Liquidation)
             // Dòng con: Có vạch xanh, thụt lề nhẹ

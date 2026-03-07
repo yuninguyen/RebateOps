@@ -228,7 +228,7 @@ class PayoutMethodResource extends Resource
                             // Description is moved into a Placeholder component within the Tab's schema.
                             ->schema([
                                 Placeholder::make('wallet_description')
-                                    ->content('Define where you receive your money (PayPal accounts or Gift Card storage)')
+                                    ->content('Define where you receive your money (PayPal accounts or Bank Accounts)')
                                     ->columnSpanFull(),
                                 TextInput::make('name')
                                     ->label('Wallet Name')
@@ -294,18 +294,32 @@ class PayoutMethodResource extends Resource
                             ->icon('heroicon-m-user-circle')
                             ->schema([
                                 Forms\Components\Grid::make(3)->schema([
-                                    Forms\Components\TextInput::make('full_name')->label('Full name'),
+                                    Forms\Components\TextInput::make('full_name')
+                                    ->label('Full name'),
                                     Forms\Components\TextInput::make('dob')
                                         ->label('Date of Birth')
                                         ->placeholder('dd/mm/yyyy')
-                                        ->displayFormat('d/m/Y')
-                                        ->format('Y-m-d') // Định dạng chuẩn để lưu vào MySQL
-                                        ->native(false)
+                                        //->displayFormat('d/m/Y')
+                                        //->format('Y-m-d') // Định dạng chuẩn để lưu vào MySQL
+                                        //->native(false)
                                         ->nullable() // Cho phép để trống
-                                        ->default(null),
+                                        ->default(null) // Đảm bảo không tự động lấy ngày hiện tại
+                                        ->mask('99/99/9999') // Tạo khuôn dd/mm/yyyy khi gõ
+                                        ->rules(['date_format:d/m/Y'])
+                                        //->dehydrated(true), // Đảm bảo trường này được gửi về backend
+                                        //->live(),  // Đồng bộ dữ liệu ngay lập tức,
+                                        ->dehydrateStateUsing(function ($state) {
+                                            if (blank($state)) return null;
+                                            try {
+                                                // Dịch từ chuẩn VN (d/m/Y) sang chuẩn Quốc tế (Y-m-d) để MySQL hiểu
+                                                return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
+                                            } catch (\Exception $e) {
+                                                return null;
+                                            }
+                                        }),
                                     Forms\Components\TextInput::make('ssn')->label('SSN / Tax ID'),
                                     Forms\Components\TextInput::make('phone')->label('Phone number'),
-                                    Forms\Components\Textarea::make('address')
+                                    Forms\Components\TextInput::make('address')
                                         ->label('Full Address')
                                         ->columnSpan(2),
                                 ]),

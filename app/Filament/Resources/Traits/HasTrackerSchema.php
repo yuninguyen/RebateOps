@@ -56,7 +56,7 @@ trait HasTrackerSchema
                                         $set('account_password_display', null);
                                     })
                                     // Admin chiếm 3 phần, Staff không chiếm phần nào (ẩn)
-                                    ->columnSpan(auth()->user()?->isAdmin() ? 3 : 0),
+                                    ->columnSpan(auth()->user()?->isAdmin() ? 6 : 0),
 
                                 // 2. SELECT PLATFORM (Làm nhỏ lại cho Staff)
                                 Forms\Components\Select::make('platform')
@@ -86,7 +86,7 @@ trait HasTrackerSchema
                                         $set('account_password_display', null);
                                     })
                                     // 🟢 Staff: Chiếm 2/12 | Admin: Chiếm 3/12
-                                    ->columnSpan(auth()->user()?->isAdmin() ? 4 : 3),
+                                    ->columnSpan(auth()->user()?->isAdmin() ? 6 : 3),
 
                                 // 3. SELECT EMAIL (Chiếm không gian lớn nhất cho Staff)
                                 Forms\Components\Select::make('account_email')
@@ -113,6 +113,25 @@ trait HasTrackerSchema
                                     ->searchable()
                                     ->live()
                                     ->required()
+                                    ->suffixAction(
+                                        Forms\Components\Actions\Action::make('copyEmail')
+                                            ->icon('heroicon-m-clipboard-document')
+                                            ->color('warning') 
+                                            ->tooltip('Copy Email')
+                                            ->action(function (Forms\Get $get, $livewire) {
+                                                $email = $get('account_email');
+
+                                                if ($email) {
+                                                    // Sử dụng chung công nghệ dispatch copy của Sếp
+                                                    $livewire->dispatch('copy-to-clipboard', text: $email);
+
+                                                    \Filament\Notifications\Notification::make()
+                                                        ->title('Email Copied!')
+                                                        ->success()
+                                                        ->send();
+                                                }
+                                            })
+                                    )
                                     ->afterStateUpdated(function ($state, $get, $set) {
                                         if (!$state) {
                                             $set('account_id', null);
@@ -129,7 +148,7 @@ trait HasTrackerSchema
                                         }
                                     })
                                     // 🟢 Staff: Chiếm 8/12 (Rất rộng) | Admin: Chiếm 3/12
-                                    ->columnSpan(auth()->user()?->isAdmin() ? 3 : 6),
+                                    ->columnSpan(auth()->user()?->isAdmin() ? 7 : 6),
 
                                 // 4. SHOW PASSWORD (Làm nhỏ lại cho Staff)
                                 Forms\Components\TextInput::make('account_password_display')
@@ -138,8 +157,27 @@ trait HasTrackerSchema
                                     ->password()
                                     ->revealable()
                                     ->dehydrated(false)
+                                    ->formatStateUsing(fn($record) => $record?->account?->password)
+                                    ->suffixAction(
+                                        Forms\Components\Actions\Action::make('copyPassword')
+                                            ->icon('heroicon-m-clipboard-document')
+                                            ->color('warning')
+                                            ->action(function (Forms\Get $get, $livewire) {
+                                                $accountId = $get('account_id');
+                                                $password = \App\Models\Account::find($accountId)?->password;
+
+                                                if ($password) {
+                                                    $livewire->dispatch('copy-to-clipboard', text: $password);
+
+                                                    \Filament\Notifications\Notification::make()
+                                                        ->title('Copied!')
+                                                        ->success()
+                                                        ->send();
+                                                }
+                                            })
+                                    )
                                     // 🟢 Staff: Chiếm 2/12 | Admin: Chiếm 3/12
-                                    ->columnSpan(auth()->user()?->isAdmin() ? 3 : 3),
+                                    ->columnSpan(auth()->user()?->isAdmin() ? 5 : 3),
                             ]),
 
                         // PHẦN HIỂN THỊ TRẠNG THÁI (Giữ nguyên logic của Sếp)
@@ -182,7 +220,7 @@ trait HasTrackerSchema
                         Forms\Components\Hidden::make('account_id')->required(),
                     ])
                     // 🟢 KẾT QUẢ CUỐI CÙNG: Staff nhìn thấy 3 ô trên 1 hàng ngang (Tỉ lệ 2-8-2)
-                    ->columns(auth()->user()?->isAdmin() ? 4 : 1),
+                    ->columns(auth()->user()?->isAdmin() ? 2 : 1),
 
                 // SECTION 2: Order Details
                 Forms\Components\Section::make('Order Details & Rebate')
