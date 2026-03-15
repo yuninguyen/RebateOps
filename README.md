@@ -1,56 +1,67 @@
-# 💰 RebateOps - Cashback Management System
+# 💰 RebateOps — Cashback Management System
 
-A powerful Laravel-based system for managing cashback/rebate accounts with real-time Google Sheets synchronization.
+A powerful Laravel-based internal tool for managing cashback/rebate accounts, tracking transactions, and synchronizing data bidirectionally with Google Sheets.
 
 ![Laravel](https://img.shields.io/badge/Laravel-12.0-FF2D20?style=flat&logo=laravel)
 ![PHP](https://img.shields.io/badge/PHP-8.2+-777BB4?style=flat&logo=php)
 ![Filament](https://img.shields.io/badge/Filament-3.2-FFAA00?style=flat)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat)
 
 ---
 
 ## 📋 Table of Contents
 
 - [Features](#-features)
-- [Tech Stack](#-tech-stack)
+- [Tech Stack](#️-tech-stack)
 - [Requirements](#-requirements)
 - [Installation](#-installation)
 - [Google Sheets Setup](#-google-sheets-setup)
+- [Role System](#-role-system)
+- [Navigation Structure](#-navigation-structure)
+- [Key Models](#-key-models--relationships)
+- [Google Sheets Sync](#-google-sheets-sync)
+- [Settlement & Reconciliation](#-settlement--reconciliation)
 - [Usage](#-usage)
-- [Project Structure](#-project-structure)
-- [Contributing](#-contributing)
-- [License](#-license)
+- [Troubleshooting](#-troubleshooting)
+- [Common Commands](#-common-commands)
 
 ---
 
 ## ✨ Features
 
 ### 🎯 Core Features
-- **Account Management** - Manage multiple cashback accounts across different platforms
-- **Payout Tracking** - Track withdrawals and currency liquidations
-- **Rebate Monitoring** - Monitor and analyze rebate transactions
-- **Google Sheets Sync** - Real-time bi-directional synchronization
-- **Activity Logging** - Complete audit trail of all changes
-- **Multi-User Support** - Assign accounts to different holders
+- **Multi-Platform Account Management** — Manage accounts across Rakuten, TopCashback, RetailMeNot, ActiveJunky, JoinHoney
+- **Rebate Tracker** — Track cashback transactions per order (pending → confirmed)
+- **Payout Logs** — Manage withdrawals, liquidations, and gift card transactions with automatic balance calculation
+- **Email & Account Hub** — Centralized management of cashback emails and linked accounts
+- **Google Sheets Sync** — Real-time bidirectional sync to Google Sheets with auto-formatting
+- **Activity Logging** — Complete audit trail of all changes (admin-only)
+- **Multi-User / Role-Based Access** — Admin and Staff roles with data scoping
 
 ### 🚀 Advanced Features
-- **Automated Balance Calculation** - Automatic balance updates on payout completion
-- **Parent-Child Transactions** - Link liquidations to original withdrawals
-- **Bulk Operations** - Import/export data in bulk
-- **Custom Formatting** - Automatic Google Sheets formatting (freeze, colors, styling)
-- **Background Jobs** - Queue-based sync for performance
+- **Parent–Child Transactions** — Link liquidation records to original withdrawals
+- **Auto Balance Calculation** — Payout method balances update automatically on transaction completion
+- **Bulk Operations** — Bulk status updates, bulk export to Google Sheets
+- **Settlement / Reconciliation** — Internal payroll module for settling staff earnings per platform
+- **Brand & Price Tracker** — Gift card brand management with per-brand exchange rates
+- **Conditional Sheet Formatting** — Auto color-code rows by status (Live/Disabled/Limited/Confirmed)
+- **Background Jobs** — Queue-based sync for non-blocking performance (retry × 3, 60s backoff)
+- **Soft Deletes & Trash Restore** — All core data is recoverable
 
 ---
 
 ## 🛠️ Tech Stack
 
 | Technology | Version | Purpose |
-|------------|---------|---------|
+|---|---|---|
 | **Laravel** | 12.0 | PHP Framework |
 | **Filament** | 3.2 | Admin Panel |
-| **Google Sheets API** | 2.19 | Sheets Integration |
-| **Spatie Activity Log** | 4.12 | Activity Tracking |
-| **OpenSpout** | 4.32 | Excel/CSV Processing |
-| **SQLite** | Default | Database (Dev) |
+| **Google Sheets API** | v4 (apiclient ^2.19) | Sheets Integration |
+| **Spatie Activity Log** | 4.12 | Audit Trail |
+| **OpenSpout** | 4.32 | Excel/CSV Import-Export |
+| **filament-logger** | * | Activity Log UI in Filament |
+| **SQLite** | — | Default (Development) |
+| **MySQL / PostgreSQL** | — | Recommended (Production) |
 
 ---
 
@@ -59,7 +70,7 @@ A powerful Laravel-based system for managing cashback/rebate accounts with real-
 - **PHP** >= 8.2
 - **Composer** (latest)
 - **Node.js** >= 18.x & NPM
-- **SQLite** (development) or **MySQL/PostgreSQL** (production)
+- **SQLite** (development) or **MySQL / PostgreSQL** (production)
 - **Git**
 
 ---
@@ -76,26 +87,19 @@ cd RebateOps
 ### Step 2: Install Dependencies
 
 ```bash
-# Install PHP dependencies
 composer install
-
-# Install JavaScript dependencies
 npm install
 ```
 
 ### Step 3: Environment Setup
 
 ```bash
-# Copy environment file
 cp .env.example .env
-
-# Generate application key
 php artisan key:generate
 
-# Create SQLite database
+# SQLite (development)
 touch database/database.sqlite
 
-# Run migrations
 php artisan migrate
 ```
 
@@ -105,10 +109,13 @@ php artisan migrate
 php artisan make:filament-user
 ```
 
-**Enter the following information:**
-- Name: `Admin`
-- Email: `admin@example.com`
-- Password: `your-secure-password`
+When prompted:
+- **Name:** `Admin`
+- **Email:** `admin@rebateops.local`
+- **Password:** *(choose a secure password)*
+
+> After creation, open the database and set `role = 'admin'` for this user.  
+> All users created via UI default to `role = 'staff'`.
 
 ---
 
@@ -117,138 +124,227 @@ php artisan make:filament-user
 ### Step 1: Create Google Cloud Project
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (e.g., "RebateOps")
-3. Enable **Google Sheets API**:
-   - Navigate to "APIs & Services" → "Library"
-   - Search for "Google Sheets API"
-   - Click "Enable"
+2. Create a new project (e.g., `RebateOps`)
+3. Enable **Google Sheets API**: APIs & Services → Library → search "Google Sheets API" → Enable
 
 ### Step 2: Create Service Account
 
-1. Go to "IAM & Admin" → "Service Accounts"
-2. Click "Create Service Account"
-3. Enter details:
-   - Name: `rebate-ops-service`
-   - Description: `Service account for RebateOps Google Sheets integration`
-4. Click "Create and Continue"
-5. Skip the optional steps and click "Done"
+1. IAM & Admin → Service Accounts → **Create Service Account**
+2. Name: `rebate-ops-service`
+3. Skip optional steps → Done
 
 ### Step 3: Generate Credentials
 
-1. Click on the newly created service account
-2. Go to "Keys" tab
-3. Click "Add Key" → "Create new key"
-4. Select "JSON" format
-5. Download the JSON file
-6. Rename it to `google-auth.json`
-7. Move it to: `storage/app/google-auth.json`
+1. Click the service account → **Keys** tab → Add Key → Create new key → **JSON**
+2. Download, rename to `google-auth.json`
+3. Move to: `storage/app/google-auth.json`
 
-**Important:** The file structure should look like `google-auth.json.example`
+> See `google-auth.json.example` for the expected file structure.
 
 ### Step 4: Share Google Sheet
 
-1. Open your Google Sheet
-2. Copy the **service account email** from `google-auth.json`:
-   ```
-   client_email: "your-service-account@your-project.iam.gserviceaccount.com"
-   ```
-3. Click "Share" button in Google Sheets
-4. Paste the service account email
-5. Set permission to **Editor**
-6. Uncheck "Notify people"
-7. Click "Share"
+1. Open your Google Spreadsheet
+2. Copy `client_email` from `google-auth.json`
+3. Share the sheet with that email — set permission to **Editor**
 
-### Step 5: Configure Application
+### Step 5: Configure `.env`
 
-1. Open `.env` file
-2. Add your Google Spreadsheet ID:
-   ```env
-   GOOGLE_SPREADSHEET_ID=your_spreadsheet_id_here
-   ```
-   
-   **How to find Spreadsheet ID:**
-   ```
-   URL: https://docs.google.com/spreadsheets/d/[SPREADSHEET_ID]/edit
-   Example: 1ChEJ3RqMAVWOPyX7ibSOoc_quMiVDBK6A7rFCqP0Ig4
-   ```
+```env
+GOOGLE_SPREADSHEET_ID=your_spreadsheet_id_here
+# How to find it: https://docs.google.com/spreadsheets/d/[SPREADSHEET_ID]/edit
+```
 
-3. Verify the path (optional):
-   ```env
-   GOOGLE_SERVICE_ACCOUNT_PATH=storage/app/google-auth.json
-   ```
+---
+
+## 👥 Role System
+
+RebateOps has two roles:
+
+| Role | Access | Description |
+|---|---|---|
+| `admin` | Full access | See all data, manage users, view activity logs |
+| `staff` | Scoped access | See only own accounts, trackers, payouts |
+
+### How roles work
+
+| Area | Admin | Staff |
+|---|---|---|
+| User Management | ✅ Full CRUD | ❌ Hidden |
+| Account list | ✅ All accounts | ✅ Own accounts only |
+| Rebate Tracker | ✅ All records | ✅ Own records only |
+| Payout Logs | ✅ All records | ✅ Own + child records |
+| Email list | ✅ All emails | ✅ Emails linked to own accounts |
+| Settlement | ✅ All staff payments | ✅ Own payments only |
+| Activity Log | ✅ Yes | ❌ Hidden |
+
+### Assigning roles
+
+Roles are managed in **Settings → Users** (admin only).  
+Options: `Admin` or `Staff`.
+
+---
+
+## 🗂️ Navigation Structure
+
+```
+RESOURCE HUB
+├── All Platforms          (Account overview)
+├── Emails                 (Email management)
+├── Rakuten
+├── TopCashback
+├── RetailMeNot
+├── ActiveJunky
+└── JoinHoney
+
+WORKING SPACE
+├── All Rebate Tracker     (All platforms combined)
+├── Rakuten Tracker
+├── TopCashback Tracker
+├── RetailMeNot Tracker
+├── ActiveJunky Tracker
+├── JoinHoney Tracker
+└── Price Tracker
+
+WALLET & PAYOUTS
+├── Payout Logs
+├── Payout Method
+└── Settlement/Reconciliation
+
+Settings  (Admin only)
+├── Users
+└── Activity Log
+```
+
+---
+
+## 📊 Key Models & Relationships
+
+### User
+- **Roles:** `admin`, `staff`
+- **Relations:** hasMany `Account`, hasMany `RebateTracker`, hasMany `PayoutLog`, hasMany `UserPayment`
+
+### Account
+- **Purpose:** A cashback platform account (one per email per platform)
+- **Fields:** platform, email_id, password (encrypted), state, status (JSON array), device, paypal_info
+- **Relations:** belongsTo `User`, belongsTo `Email`, hasMany `RebateTracker`, hasMany `PayoutLog`
+
+### Email
+- **Purpose:** Central email address shared across multiple platform accounts
+- **Fields:** email, password, two_factor_code, status (Live/Disabled), note
+- **Relations:** hasMany `Account`
+
+### RebateTracker
+- **Purpose:** Individual cashback transaction per order
+- **Fields:** store_name, order_id, order_value, cashback_percent, rebate_amount, status, transaction_date, payout_date
+- **Status flow:** Clicked → Pending → Confirmed / Ineligible / Missing
+- **Relations:** belongsTo `Account`, belongsTo `User`
+
+### PayoutLog
+- **Purpose:** Withdrawal or liquidation record
+- **Types:** `withdrawal` (PayPal), `hold` (Gift Card kept), `liquidation` (convert to VND)
+- **Fields:** amount_usd, fee_usd, boost_percentage, net_amount_usd, exchange_rate, total_vnd, gc_brand, gc_code (encrypted), gc_pin (encrypted)
+- **Parent–Child:** A `liquidation` record links to its parent `withdrawal` via `parent_id`
+- **Relations:** belongsTo `Account`, belongsTo `PayoutMethod`, hasMany `children` (PayoutLog)
+
+### PayoutMethod
+- **Purpose:** Wallet or payment destination (PayPal account, bank, etc.)
+- **Fields:** current_balance, exchange_rate
+- **Balance logic:** `withdrawal` → balance ++, `liquidation`/`hold` → balance −−
+
+### Brand
+- **Purpose:** Gift card brand configuration
+- **Fields:** name, boost (%), maximum_limit, gc_rate (per-brand exchange rate)
+
+### UserPayment *(new in v4)*
+- **Purpose:** Internal settlement record — summarizes all payouts owed to a staff member
+- **Fields:** platform, transaction_type, total_usd, exchange_rate, total_vnd, status (pending/paid), payment_proof (image upload)
+- **Relations:** belongsTo `User`, hasMany `PayoutLog`
+
+---
+
+## 🔄 Google Sheets Sync
+
+### Automatic Sync
+
+Data syncs automatically to Google Sheets when records are created, updated, or deleted. This is handled by:
+
+- `PayoutLogObserver` → dispatches `SyncGoogleSheetJob`
+- `RebateTrackerObserver` → dispatches `SyncGoogleSheetJob`
+- `EmailObserver` → dispatches `SyncGoogleSheetJob`
+- `PayoutMethodObserver` → dispatches `SyncGoogleSheetJob`
+
+### Sheet Tab Structure
+
+| Tab Name | Data |
+|---|---|
+| `Emails` | All email records |
+| `Rakuten_Accounts` | Accounts per platform |
+| `All_Rebate_Tracker` | All tracker records |
+| `Rakuten_Tracker` | Tracker per platform |
+| `Payout_Logs` | All payout records |
+| `Payout_Methods` | All wallets |
+
+### Sync Features
+
+- **Upsert logic** — Updates existing rows, appends new ones (matched by record ID)
+- **Header row** — Auto-written when a new sheet tab is created
+- **Freeze + Bold header** — Row 1 is frozen and formatted automatically
+- **Conditional formatting** — Rows colored by status (green = confirmed, red = limited, etc.)
+- **Retry on failure** — Jobs retry up to 3× with 60s delay
+- **Cache** — Sheet metadata cached 60 minutes to reduce API calls
+
+### Manual Bulk Export
+
+1. Go to any Resource list
+2. Select records with checkboxes
+3. Click **Export to Google Sheet**
+
+---
+
+## 💳 Settlement & Reconciliation *(new in v4)*
+
+This module lets Admin settle earnings with Staff members.
+
+### Workflow
+
+1. Admin reviews completed PayoutLogs per staff per platform
+2. Admin creates a `UserPayment` record summarizing the payout
+3. Admin uploads payment proof (bank transfer screenshot)
+4. Status changes from `Pending` → `Paid`
+5. Staff can view their own settlement records (read-only)
+
+### Access
+
+- **Admin:** Create, edit, delete all settlement records; upload payment proof
+- **Staff:** View own records only; cannot create or modify
 
 ---
 
 ## 💻 Usage
 
-### Development Mode
-
-Run all services with a single command:
+### Start Development Server
 
 ```bash
 composer run dev
 ```
 
-This starts:
-- ✅ Web server (http://localhost:8000)
-- ✅ Queue worker (background jobs)
-- ✅ Log viewer (Laravel Pail)
-- ✅ Vite dev server (hot reload)
+Starts all services concurrently:
+- `http://localhost:8000` — Web server
+- Queue worker (Google Sheets background jobs)
+- Laravel Pail (log viewer)
+- Vite (frontend hot reload)
 
-### Individual Services
-
-Or run services separately:
-
-```bash
-# Web server
-php artisan serve
-
-# Queue worker (for Google Sheets sync)
-php artisan queue:work
-
-# Vite (frontend assets)
-npm run dev
-```
-
-### Accessing the Application
+### Access the Application
 
 - **Homepage:** http://localhost:8000
 - **Admin Panel:** http://localhost:8000/admin
-  - Email: `admin@example.com`
-  - Password: (the password you created)
 
----
+### Individual Services
 
-## 📁 Project Structure
-
-```
-RebateOps/
-├── app/
-│   ├── Filament/           # Admin panel resources
-│   │   ├── Resources/      # CRUD resources
-│   │   ├── Widgets/        # Dashboard widgets
-│   │   └── Pages/          # Custom pages
-│   ├── Models/             # Eloquent models
-│   │   ├── Account.php
-│   │   ├── PayoutLog.php
-│   │   ├── RebateTracker.php
-│   │   └── ...
-│   ├── Services/           # Business logic
-│   │   └── GoogleSheetService.php
-│   ├── Jobs/               # Background jobs
-│   │   └── SyncGoogleSheetJob.php
-│   └── Observers/          # Model observers
-│       ├── AccountObserver.php
-│       └── PayoutLogObserver.php
-├── database/
-│   ├── migrations/         # Database schema
-│   └── database.sqlite     # SQLite database
-├── storage/
-│   └── app/
-│       ├── google-auth.json         # Your credentials (gitignored)
-│       └── google-auth.json.example # Template
-└── config/
-    └── services.php        # Third-party service configs
+```bash
+php artisan serve          # Web server only
+php artisan queue:work     # Queue worker (required for Sheets sync)
+npm run dev                # Vite asset bundler
 ```
 
 ---
@@ -257,12 +353,12 @@ RebateOps/
 
 ### Database
 
-**Development (Default):**
+**Development (default):**
 ```env
 DB_CONNECTION=sqlite
 ```
 
-**Production (Recommended):**
+**Production (recommended):**
 ```env
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
@@ -272,164 +368,77 @@ DB_USERNAME=root
 DB_PASSWORD=your_password
 ```
 
-Then run:
-```bash
-php artisan migrate:fresh
-```
-
 ### Queue
-
-For background job processing:
 
 ```env
 QUEUE_CONNECTION=database
 ```
 
-Make sure queue worker is running:
-```bash
-php artisan queue:work
-```
-
----
-
-## 📊 Key Models & Relationships
-
-### Account
-- **Purpose:** Manage cashback platform accounts
-- **Relations:** 
-  - Belongs to `User` (holder)
-  - Belongs to `Email`
-  - Has many `RebateTracker`
-
-### PayoutLog
-- **Purpose:** Track withdrawals and liquidations
-- **Features:**
-  - Automatic balance calculation
-  - Parent-child relationship (withdrawal → liquidation)
-  - Fee and boost calculation
-- **Relations:**
-  - Belongs to `User`
-  - Belongs to `Account`
-  - Belongs to `PayoutMethod`
-
-### RebateTracker
-- **Purpose:** Track rebate transactions
-- **Relations:**
-  - Belongs to `Account`
-
----
-
-## 🔄 Google Sheets Sync
-
-### Automatic Sync
-
-Data automatically syncs to Google Sheets when:
-- Creating new records
-- Updating existing records
-- Deleting records
-- Bulk operations
-
-### Manual Sync
-
-Trigger sync manually via Filament:
-1. Go to any resource (Accounts, Payouts, etc.)
-2. Select records
-3. Click "Sync to Google Sheets" bulk action
-
-### Sync Features
-
-- ✅ **Upsert Logic** - Updates existing, adds new
-- ✅ **Batch Operations** - Multiple records at once
-- ✅ **Error Handling** - Detailed logging
-- ✅ **Automatic Formatting** - Headers, colors, freeze panes
-
----
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-php artisan test
-
-# Run specific test
-php artisan test --filter=AccountTest
-
-# With coverage
-php artisan test --coverage
-```
-
----
-
-## 🛡️ Security
-
-- ✅ **Environment Variables** - Sensitive data in `.env`
-- ✅ **Service Account** - Google credentials secured
-- ✅ **Activity Logging** - Full audit trail
-- ✅ **CSRF Protection** - Laravel built-in
-- ✅ **SQL Injection Prevention** - Eloquent ORM
-
-**Important:** Never commit:
-- `.env` file
-- `google-auth.json`
-- `database/database.sqlite`
+> SQLite does not handle concurrent writes well. Use MySQL in production.
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Google Sheets API Error
+### User can't log in after being created via UI
 
-```bash
+All users created through the Filament UI get `role = 'staff'` by default. Only `admin` and `staff` roles can access the panel. If a user is stuck, check their role in the database.
+
+```sql
+UPDATE users SET role = 'staff' WHERE email = 'user@example.com';
+```
+
+### Google Spreadsheet ID not configured
+
+```
 Error: "Google Spreadsheet ID is not configured"
 ```
 
-**Solution:**
-1. Check `.env` file has `GOOGLE_SPREADSHEET_ID`
-2. Make sure it's not empty
-3. Restart server: `php artisan serve`
+Add to `.env`:
+```env
+GOOGLE_SPREADSHEET_ID=your_spreadsheet_id_here
+```
 
----
+Find the ID in your sheet URL:
+```
+https://docs.google.com/spreadsheets/d/[THIS_IS_THE_ID]/edit
+```
 
-### Service Account File Not Found
+### Service account file not found
 
-```bash
+```
 Error: "Google service account file not found"
 ```
 
-**Solution:**
-1. Verify file exists: `ls storage/app/google-auth.json`
-2. Check file permissions: `chmod 644 storage/app/google-auth.json`
-3. Verify path in `.env`: `GOOGLE_SERVICE_ACCOUNT_PATH`
-
----
-
-### Permission Denied on Google Sheets
-
 ```bash
+ls storage/app/google-auth.json   # Verify file exists
+chmod 644 storage/app/google-auth.json
+```
+
+### Permission denied on Google Sheets
+
+```
 Error: "The caller does not have permission"
 ```
 
-**Solution:**
-1. Open Google Sheet
-2. Click "Share"
-3. Add service account email
-4. Set permission to "Editor"
-5. Save
+Share the Google Sheet with the `client_email` from `google-auth.json` and set permission to **Editor**.
 
----
-
-### Queue Not Processing
+### Queue not processing
 
 ```bash
-# Check if queue worker is running
+# Check if worker is running
 ps aux | grep queue:work
 
-# Start queue worker
+# Start it
 php artisan queue:work
 
 # Clear failed jobs
 php artisan queue:flush
 ```
+
+### New sheet tabs missing header row
+
+If a new tab was created before v3 (when the header fix was applied), the first row may be data instead of headers. Re-export via **Bulk Action → Export to Google Sheet** to trigger a fresh write.
 
 ---
 
@@ -442,68 +451,94 @@ php artisan optimize:clear
 # Run migrations
 php artisan migrate
 
-# Rollback migrations
-php artisan migrate:rollback
+# Fresh migration (warning: drops all data)
+php artisan migrate:fresh
 
-# Seed database
-php artisan db:seed
+# Create admin user
+php artisan make:filament-user
 
-# Create new Filament resource
-php artisan make:filament-resource Product
+# Run tests
+php artisan test
+
+# Code style fixer
+./vendor/bin/pint
 
 # List all routes
 php artisan route:list
 
-# Run code style fixer
-./vendor/bin/pint
+# View queue jobs
+php artisan queue:monitor
 ```
 
 ---
 
-## 🤝 Contributing
+## 📁 Project Structure
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+```
+RebateOps/
+├── app/
+│   ├── Filament/
+│   │   ├── Resources/          # CRUD resources (15+ resources)
+│   │   │   └── Traits/         # Shared schemas (HasTrackerSchema, HasAccountSchema…)
+│   │   ├── Widgets/            # Dashboard widgets
+│   │   └── Pages/              # Custom pages (Dashboard)
+│   ├── Models/                 # Eloquent models
+│   │   ├── Account.php
+│   │   ├── Email.php
+│   │   ├── PayoutLog.php
+│   │   ├── PayoutMethod.php
+│   │   ├── RebateTracker.php
+│   │   ├── Brand.php
+│   │   ├── UserPayment.php     ← new in v4
+│   │   └── User.php
+│   ├── Services/
+│   │   └── GoogleSheetService.php
+│   ├── Jobs/
+│   │   └── SyncGoogleSheetJob.php
+│   ├── Observers/              # Model event handlers
+│   ├── Policies/               # Authorization policies
+│   └── Console/Commands/
+│       └── SyncAllToGoogleSheet.php
+├── database/
+│   ├── migrations/             # 46 migrations
+│   └── database.sqlite
+├── storage/
+│   └── app/
+│       └── google-auth.json    # (gitignored — add manually)
+└── config/
+    └── services.php
+```
 
 ---
 
-## 📝 License
+## 🔐 Security Notes
 
-This project is licensed under the MIT License.
-
----
-
-## 📞 Support & Resources
-
-### Documentation
-- [Laravel Docs](https://laravel.com/docs/12.x)
-- [Filament Docs](https://filamentphp.com/docs)
-- [Google Sheets API](https://developers.google.com/sheets/api)
-
-### Communities
-- [Laravel Discord](https://discord.gg/laravel)
-- [Filament Discord](https://discord.gg/filamentphp)
-- [Laravel Vietnam](https://www.facebook.com/groups/vietnam.laravel/)
+- Account passwords are stored **encrypted** in the database (`encrypted` cast)
+- Gift card codes and PINs are also **encrypted** at rest
+- Google credentials (`google-auth.json`) are gitignored — never commit them
+- Activity logs are accessible to **admin only**
+- Each staff member sees **only their own data** across all resources
 
 ---
 
 ## 🌟 Roadmap
 
-### Version 1.0 (Current)
-- ✅ Account Management
-- ✅ Payout Tracking
-- ✅ Google Sheets Sync
+### Version 1.x (Current)
+- ✅ Multi-platform Account Management
+- ✅ Rebate Tracker
+- ✅ Payout Logs (withdrawal / liquidation / gift card)
+- ✅ Google Sheets bidirectional sync
 - ✅ Activity Logging
+- ✅ Role-based access (admin / staff)
+- ✅ Settlement / Reconciliation module
+- ✅ Brand & Gift Card rate management
 
 ### Version 2.0 (Planned)
-- [ ] API Endpoints (RESTful)
+- [ ] RESTful API endpoints
 - [ ] Advanced Analytics Dashboard
-- [ ] Multi-currency Support
 - [ ] Email Notifications
-- [ ] Mobile App (React Native)
+- [ ] Automated Settlement generation
+- [ ] Unit & Feature test coverage
 
 ---
 
@@ -516,10 +551,10 @@ This project is licensed under the MIT License.
 
 ## 🙏 Acknowledgments
 
-- [Laravel](https://laravel.com) - The PHP Framework
-- [Filament](https://filamentphp.com) - The Admin Panel
-- [Spatie](https://spatie.be) - Laravel Packages
-- [Google](https://developers.google.com) - Google Sheets API
+- [Laravel](https://laravel.com) — The PHP Framework
+- [Filament](https://filamentphp.com) — The Admin Panel
+- [Spatie](https://spatie.be) — Laravel Packages
+- [Google](https://developers.google.com/sheets/api) — Google Sheets API
 
 ---
 
