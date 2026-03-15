@@ -39,14 +39,14 @@ class BrandResource extends Resource
                     ->live(onBlur: true)
                     ->afterStateUpdated(fn($state, $set) => $set('slug', \Str::slug($state))),
                 Forms\Components\Select::make('platform')
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
+                    ->options([
                         'Rakuten' => 'Rakuten',
                         'RetailMeNot' => 'RetailMeNot',
                         'JoinHoney' => 'Join Honey',
                         'Price' => 'Price.com',
                         'TopCashback' => 'TopCashback',
                         'ActiveJunky' => 'Active Junky',
-                    })
+                    ])
                     ->required(),
                 Forms\Components\TextInput::make('slug')
                     ->required()
@@ -62,6 +62,12 @@ class BrandResource extends Resource
                     ->numeric()
                     ->prefix('$')
                     ->helperText('If the account balance exceeds this amount, the Brand will be hidden/locked.'),
+                Forms\Components\TextInput::make('gc_rate')
+                    ->label('Exchange Rate (VND)')
+                    ->numeric()
+                    ->prefix('₫')
+                    ->default(20000)
+                    ->helperText('The exchange rate applied when paying for this type of Gift Card for the User.'),
             ]);
     }
 
@@ -103,6 +109,11 @@ class BrandResource extends Resource
                     ->searchable()
                     ->placeholder('No Limit') // Nếu null hiện No Limit
                     ->color('danger'),
+                Tables\Columns\TextColumn::make('gc_rate')
+                    ->label('Rate')
+                    ->alignment(Alignment::Center)
+                    ->money('VND', locale: 'vi_VN')
+                    ->color('primary'),
                 Tables\Columns\TextColumn::make('slug')
                     ->alignment(Alignment::Center)
                     ->toggleable(isToggledHiddenByDefault: true), // Ẩn bớt cho gọn, cần thì bật lên,

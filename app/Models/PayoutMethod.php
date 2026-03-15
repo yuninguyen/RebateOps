@@ -22,6 +22,7 @@ class PayoutMethod extends Model
         'name',
         'type',
         'current_balance',
+        'exchange_rate',
         'email',
         'password',
         'paypal_account',

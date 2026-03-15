@@ -17,6 +17,7 @@ class Brand extends Model
         'slug',
         'boost_percentage',
         'maximum_limit',
+        'gc_rate',
     ];
 
     // Cấu hình theo dõi toàn bộ các cột được phép điền

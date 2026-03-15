@@ -28,18 +28,25 @@ class ListAccounts extends ListRecords
                 ->importer(\App\Filament\Imports\AccountImporter::class)
                 ->label('Import All Data')
                 ->color('success')
-                ->icon('heroicon-o-arrow-up-tray'),
+                ->icon('heroicon-o-arrow-up-tray')
+                // 🟢 THÊM DÒNG NÀY: Chỉ hiển thị nếu là Admin
+                ->visible(fn() => auth()->user()?->isAdmin()),
 
             // Nút Export
             \Filament\Actions\ExportAction::make()
                 ->exporter(\App\Filament\Exports\AccountExporter::class)
                 ->label('Export All Data')
                 ->color('info')
-                ->icon('heroicon-o-arrow-down-tray'),
+                ->icon('heroicon-o-arrow-down-tray')
+                // 🟢 THÊM DÒNG NÀY: Chỉ hiển thị nếu là Admin
+                ->visible(fn() => auth()->user()?->isAdmin()),
+
+            // Nút Create
             \Filament\Actions\CreateAction::make(),
         ];
     }
 
+    /*
     protected function getTableBulkActions(): array
     {
         return [
@@ -52,5 +59,5 @@ class ListAccounts extends ListRecords
                 Tables\Actions\DeleteBulkAction::make(),
             ]),
         ];
-    }
+    } */
 }

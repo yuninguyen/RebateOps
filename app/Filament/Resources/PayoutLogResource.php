@@ -396,7 +396,7 @@ class PayoutLogResource extends Resource
                                     })
                                     ->mapWithKeys(function ($acc) {
                                         $email = (string) ($acc->email?->email ?? 'No Email');
-                                        $platform = (string) strtoupper($acc->platform ?? 'N/A');
+                                        $platform = (string) ucwords($acc->platform ?? 'N/A');
 
                                         // Hiển thị thêm số dư bên cạnh tên để nhân viên tự tin chọn
                                         $balance = number_format(self::getAvailableBalance($acc->id), 2);
@@ -745,7 +745,7 @@ class PayoutLogResource extends Resource
                         $email = $account->email?->email ?? 'N/A';
 
                         // Lấy platform trực tiếp từ bảng Account (Cột platform có sẵn trong bảng accounts)
-                        $platform = strtoupper($account->platform ?? 'N/A');
+                        $platform = ucwords(str_replace(['_', '-'], ' ', $account->platform ?? 'N/A'));
 
                         return "
                                 <div style='display: inline-block; text-align: left; line-height: 1.7;'>
@@ -896,6 +896,7 @@ class PayoutLogResource extends Resource
                 Tables\Columns\TextColumn::make('total_vnd')
                     ->label('Total VND')
                     ->placeholder('N/A')
+                    ->visible(fn() => auth()->user()?->isAdmin()) // 🟢 ẨN KHỎI NHÂN VIÊN
                     ->numeric(0, ',', '.')
                     ->prefix('₫')
                     ->alignment(Alignment::Right)
@@ -917,6 +918,18 @@ class PayoutLogResource extends Resource
                         default => 'gray',
                     })
                     ->formatStateUsing(fn(string $state): string => ucfirst($state)),
+
+                Tables\Columns\TextColumn::make('payment_status')
+                    ->label('Settlement') // Đổi từ Chốt sổ
+                    ->getStateUsing(fn($record) => $record->user_payment_id ? 'Settled' : 'Unsettled') // Settled: Đã chốt, Unsettled: Chưa chốt
+                    ->badge()
+                    ->alignment(Alignment::Center)
+                    ->color(fn(string $state): string => match ($state) {
+                        'Settled' => 'success',
+                        'Unsettled' => 'danger',
+                        default => 'secondary',
+                    }),
+
             ])
             ->filters([
                 // Only shows platforms that currently have records in PayoutLog
@@ -973,6 +986,16 @@ class PayoutLogResource extends Resource
                         'completed' => 'Completed',
                         'rejected' => 'Rejected',
                     ]),
+
+                Tables\Filters\TernaryFilter::make('is_settled')
+                    ->label('Settlement Status') // Đổi từ Trạng thái Chốt sổ
+                    ->placeholder('All Records')
+                    ->trueLabel('✅ Settled') // Đã chốt
+                    ->falseLabel('⏳ Unsettled') // Chưa chốt
+                    ->queries(
+                        true: fn(Builder $query) => $query->whereNotNull('user_payment_id'),
+                        false: fn(Builder $query) => $query->whereNull('user_payment_id'),
+                    ),
 
                 // 2. LỌC THEO THỜI GIAN (TỪ NGÀY - ĐẾN NGÀY)
                 Tables\Filters\Filter::make('created_at')
@@ -1040,7 +1063,7 @@ class PayoutLogResource extends Resource
             // THÊM DÒNG NÀY ĐỂ ĐƯA FILTER RA NGOÀI:
             ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContent)
             // 🟢 THAY ĐỔI DÒNG NÀY: Admin hiện 3 cột, Staff hiện 5 cột
-            ->filtersFormColumns(auth()->user()?->isAdmin() ? 3 : 5) // QUAN TRỌNG: Tổng Layout là 3 cột (Status [1] + Date [2] = 3)
+            ->filtersFormColumns(auth()->user()?->isAdmin() ? 4 : 5) // QUAN TRỌNG: Tổng Layout là 3 cột (Status [1] + Date [2] = 3)
             ->actions([
                 //Nút Exchange to VND ở cột Transaction Type
                 Tables\Actions\Action::make('currency_exchange')
@@ -1150,6 +1173,9 @@ class PayoutLogResource extends Resource
                         ->label('Export to Google Sheet')
                         ->icon('heroicon-o-table-cells')
                         ->color('success')
+                        // 🟢 THÊM DÒNG NÀY: Chỉ hiển thị nếu là Admin
+                        ->visible(fn() => auth()->user()?->isAdmin())
+                        ->requiresConfirmation()
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
                             try {
                                 $sheetService = app(\App\Services\GoogleSheetService::class);
@@ -1195,6 +1221,127 @@ class PayoutLogResource extends Resource
                                 \App\Jobs\SyncGoogleSheetJob::dispatch($record->id, get_class($record));
                             }
                         }),
+
+                    // 🚀 NÚT MỚI: CHỐT SỔ & TÍNH LƯƠNG TỰ ĐỘNG
+                    Tables\Actions\BulkAction::make('generate_payment')
+                        ->label('Settle & Generate Payment') // Chốt sổ & Tạo phiếu thanh toán
+                        ->icon('heroicon-o-calculator')
+                        ->color('warning')
+                        ->visible(fn() => auth()->user()?->isAdmin()) // Chỉ Admin
+                        ->requiresConfirmation()
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+
+                            // 1. Chỉ lọc đơn hợp lệ: Đã Completed và Chưa bị chốt sổ
+                            $validSelected = $records->where('status', 'completed')->whereNull('user_payment_id');
+
+                            if ($validSelected->isEmpty()) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Settlement Failed!')
+                                    ->body('No valid records found (Requires "Completed" status and not yet settled).')
+                                    ->danger()
+                                    ->send();
+                                return;
+                            }
+
+                            // 🟢 FIX LỖI NHÂN ĐÔI (DOUBLE COUNTING)
+                            // Gom tất cả ID lại: Nếu là đơn con thì lấy ID của cha, nếu là cha thì lấy ID của chính nó.
+                            // Sau đó dùng unique() để loại bỏ các ID trùng nhau.
+                            $parentIds = $validSelected->map(fn($log) => $log->parent_id ?? $log->id)->unique();
+
+                            // Lấy lại danh sách các đơn Gốc (Parent) sạch sẽ từ Database
+                            $parentLogs = \App\Models\PayoutLog::whereIn('id', $parentIds)
+                                ->whereNull('user_payment_id')
+                                ->get();
+
+                            // 2. GOM NHÓM THÔNG MINH (Chỉ gom các đơn Gốc)
+                            $groupedLogs = $parentLogs->groupBy(function ($log) {
+                                $platform = $log->account?->platform ?? 'unknown';
+                                return $log->user_id . '_' .
+                                    $platform . '_' .
+                                    $log->asset_type . '_' .
+                                    ($log->gc_brand ?? 'null') . '_' .
+                                    ($log->payout_method_id ?? 'null');
+                            });
+
+                            // 3. XỬ LÝ TỪNG NHÓM 
+                            foreach ($groupedLogs as $groupKey => $logs) {
+                                $firstLog = $logs->first();
+                                $sourceName = '';
+                                // 🟢 1. GỌI PLATFORM TỪ TRAIT HASPLATFORM CỦA SẾP
+                                $platformRaw = $firstLog->account?->platform ?? 'unknown';
+
+                                // Gọi thẳng mảng $platform từ Trait mà không cần khởi tạo
+                                $platformName = \App\Filament\Resources\Traits\HasPlatform::$platform[$platformRaw] ?? strtoupper($platformRaw);
+
+                                // 🟢 2. GỌI BRAND TỪ DATABASE (CHUẨN NHẤT)
+                                if ($firstLog->asset_type === 'gift_card') {
+                                    // Tìm Brand trong DB để lấy cái 'name' hiển thị đẹp nhất
+                                    $brandRecord = \App\Models\Brand::where('slug', $firstLog->gc_brand)->first();
+                                    $sourceName = $brandRecord ? $brandRecord->name : ucwords(str_replace(['_', '-'], ' ', $firstLog->gc_brand));
+                                } else {
+                                    $sourceName = $firstLog->payoutMethod?->name ?? 'Unknown Wallet';
+                                }
+
+                                $totalUsd = 0;
+                                $totalVnd = 0;
+
+                                $parentIdsToUpdate = [];
+                                $childIdsToUpdate = [];
+
+                                // 🟢 QUÉT TỪNG ĐƠN GỐC ĐỂ TÍNH TIỀN
+                                foreach ($logs as $log) {
+                                    // Tìm đơn con đã Exchange của chính đơn gốc này
+                                    $exchangedChild = $log->children()
+                                        ->whereNotNull('exchange_rate')
+                                        ->where('exchange_rate', '>', 0)
+                                        ->latest()
+                                        ->first();
+
+                                    $targetRecord = $exchangedChild ? $exchangedChild : $log;
+
+                                    $usd = $targetRecord->net_amount_usd > 0 ? $targetRecord->net_amount_usd : $log->net_amount_usd;
+                                    $rate = $targetRecord->exchange_rate ?? 0;
+                                    $vnd = $targetRecord->total_vnd > 0 ? $targetRecord->total_vnd : ($usd * $rate);
+
+                                    $totalUsd += $usd;
+                                    $totalVnd += $vnd;
+
+                                    // Ghi nhớ ID để khóa
+                                    $parentIdsToUpdate[] = $log->id;
+                                    if ($exchangedChild) {
+                                        $childIdsToUpdate[] = $exchangedChild->id;
+                                    }
+                                }
+
+                                // Tính tỷ giá trung bình
+                                $averageRate = $totalUsd > 0 ? round($totalVnd / $totalUsd, 2) : 0;
+
+                                // 4. TẠO PHIẾU LƯƠNG
+                                $payment = \App\Models\UserPayment::create([
+                                    'user_id' => $firstLog->user_id,
+                                    'platform' => $platformName,
+                                    'transaction_type' => ($firstLog->asset_type === 'gift_card' ? 'Gift Card' : 'PayPal') . " ({$sourceName})",
+                                    'total_usd' => $totalUsd,
+                                    'exchange_rate' => $averageRate,
+                                    'total_vnd' => $totalVnd,
+                                    'status' => 'pending',
+                                ]);
+
+                                // 5. CẬP NHẬT ID PHIẾU LƯƠNG ĐỂ KHÓA ĐƠN
+                                \App\Models\PayoutLog::whereIn('id', $parentIdsToUpdate)->update(['user_payment_id' => $payment->id]);
+
+                                if (!empty($childIdsToUpdate)) {
+                                    \App\Models\PayoutLog::whereIn('id', $childIdsToUpdate)->update(['user_payment_id' => $payment->id]);
+                                }
+                            }
+
+                            \Filament\Notifications\Notification::make()
+                                ->title('Settlement Successful!')
+                                ->body('Exact exchange rates have been applied from Exchanged records.')
+                                ->success()
+                                ->send();
+                        })
+                        ->deselectRecordsAfterCompletion(),
 
                     Tables\Actions\RestoreBulkAction::make(),     // 🟢 Khôi phục nhiều dòng
                     Tables\Actions\DeleteBulkAction::make(),

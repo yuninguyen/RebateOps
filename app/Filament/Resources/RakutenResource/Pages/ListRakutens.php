@@ -26,20 +26,26 @@ class ListRakutens extends ListRecords
                 ->importer(\App\Filament\Imports\AccountImporter::class)
                 ->label('Import All Data')
                 ->color('success')
-                ->icon('heroicon-o-arrow-up-tray'),
+                ->icon('heroicon-o-arrow-up-tray')
+                // 🟢 CHỈ HIỆN CHO ADMIN
+                ->visible(fn() => auth()->user()?->isAdmin()),
 
             // Nút Export
             \Filament\Actions\ExportAction::make()
                 ->exporter(\App\Filament\Exports\AccountExporter::class)
                 ->label('Export All Data')
                 ->color('info')
-                ->icon('heroicon-o-arrow-down-tray'),
+                ->icon('heroicon-o-arrow-down-tray')
+                // 🟢 CHỈ HIỆN CHO ADMIN
+                ->visible(fn() => auth()->user()?->isAdmin()),
 
             // Nút Sync to Google Sheet
             Actions\Action::make('sync_this_platform')
                 ->label('Sync to Google Sheet')
                 ->icon('heroicon-o-arrow-path')
                 ->color('success')
+                // 🟢 CHỈ HIỆN CHO ADMIN
+                ->visible(fn() => auth()->user()?->isAdmin())
                 ->requiresConfirmation()
                 ->action(function () {
                     $records = $this->getFilteredTableQuery()->get();

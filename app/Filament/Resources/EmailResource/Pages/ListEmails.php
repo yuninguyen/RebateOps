@@ -45,21 +45,27 @@ class ListEmails extends ListRecords
                             </a>
                         </div>
                     </div>
-                ')),
+                '))
+                // 🟢 CHỈ HIỆN CHO ADMIN
+                ->visible(fn() => auth()->user()?->isAdmin()),
 
             // Nút Export
             \Filament\Actions\ExportAction::make()
                 ->exporter(\App\Filament\Exports\EmailExporter::class)
                 ->label('Export All Data')
                 ->color('info')
-                ->icon('heroicon-o-arrow-down-tray'),
+                ->icon('heroicon-o-arrow-down-tray')
+                // 🟢 CHỈ HIỆN CHO ADMIN
+                ->visible(fn() => auth()->user()?->isAdmin()),
 
-            //Nút Sync tto Google Sheet
+            //Nút Sync to Google Sheet
             Actions\Action::make('sync_to_google_sheet')
                 ->label('Sync to Google Sheet')
                 ->icon('heroicon-o-arrow-path')
                 ->color('success')
                 ->requiresConfirmation()
+                // 🟢 CHỈ HIỆN CHO ADMIN
+                ->visible(fn() => auth()->user()?->isAdmin())
                 ->action(function () {
                     $sheetService = app(GoogleSheetService::class);
                     $targetTab = 'Emails';
@@ -115,7 +121,8 @@ class ListEmails extends ListRecords
                 }),
 
             // Nút Create
-            \Filament\Actions\CreateAction::make(),
+            \Filament\Actions\CreateAction::make()
+            ->visible(fn() => auth()->user()?->isAdmin()),
         ];
     }
 }

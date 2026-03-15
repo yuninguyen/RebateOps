@@ -357,6 +357,8 @@ class EmailResource extends Resource
                         ->label('Export to Google Sheet')
                         ->icon('heroicon-o-table-cells')
                         ->color('success')
+                        // 🟢 THÊM DÒNG NÀY: Chỉ hiển thị nếu là Admin
+                        ->visible(fn() => auth()->user()?->isAdmin())
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
                             try {
                                 $sheetService = app(\App\Services\GoogleSheetService::class);

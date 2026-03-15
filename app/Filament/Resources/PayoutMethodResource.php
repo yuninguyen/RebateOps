@@ -254,6 +254,13 @@ class PayoutMethodResource extends Resource
                                     ->disabled() // Để hệ thống tự cập nhật từ Payout Logs sau này
                                     ->dehydrated(false),
 
+                                TextInput::make('exchange_rate')
+                                    ->label('Liquidation Rate (Tỷ giá thanh khoản)')
+                                    ->numeric()
+                                    ->prefix('₫')
+                                    ->default(20000)
+                                    ->helperText('The VND exchange rate will be applied when withdrawing funds from this wallet to pay the User.'),
+
                                 Select::make('status')
                                     ->label('Status')
                                     ->options([
@@ -295,7 +302,7 @@ class PayoutMethodResource extends Resource
                             ->schema([
                                 Forms\Components\Grid::make(3)->schema([
                                     Forms\Components\TextInput::make('full_name')
-                                    ->label('Full name'),
+                                        ->label('Full name'),
                                     Forms\Components\TextInput::make('dob')
                                         ->label('Date of Birth')
                                         ->placeholder('dd/mm/yyyy')
@@ -394,6 +401,9 @@ class PayoutMethodResource extends Resource
                                 ->badge(),
                             Infolists\Components\TextEntry::make('current_balance')
                                 ->money('USD')
+                                ->color('warning'),
+                            Infolists\Components\TextEntry::make('exchange_rate')
+                                ->money('VND')
                                 ->color('success'),
                             Infolists\Components\TextEntry::make('status')
                                 ->badge()
@@ -610,6 +620,13 @@ class PayoutMethodResource extends Resource
                     ->label('Current Balance')
                     ->alignment(Alignment::Center)
                     ->money('usd')
+                    ->color('warning')
+                    ->weight('bold'),
+
+                Tables\Columns\TextColumn::make('exchange_rate')
+                    ->label('Rate')
+                    ->money('VND')
+                    ->alignment(Alignment::Center)
                     ->color('success')
                     ->weight('bold'),
             ])

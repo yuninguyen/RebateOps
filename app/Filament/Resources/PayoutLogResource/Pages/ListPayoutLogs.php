@@ -24,6 +24,8 @@ class ListPayoutLogs extends ListRecords
                 ->icon('heroicon-o-arrow-path')
                 ->color('success')
                 ->requiresConfirmation()
+                // 🟢 CHỈ HIỆN CHO ADMIN
+                ->visible(fn() => auth()->user()?->isAdmin())
                 ->action(fn() => PayoutLogResource::syncToGoogleSheet()),
 
             // Nút Sync ngược từ Sheet về
@@ -31,6 +33,8 @@ class ListPayoutLogs extends ListRecords
                 ->label('Sync From Google Sheet')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('warning')
+                // 🟢 CHỈ HIỆN CHO ADMIN
+                ->visible(fn() => auth()->user()?->isAdmin())
                 ->action(fn() => PayoutLogResource::syncFromGoogleSheet()),
         ];
     }

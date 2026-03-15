@@ -18,6 +18,8 @@ class ListRetailMeNots extends ListRecords
                 ->label('Sync to Google Sheet')
                 ->icon('heroicon-o-arrow-path')
                 ->color('success')
+                // 🟢 CHỈ HIỆN CHO ADMIN
+                ->visible(fn() => auth()->user()?->isAdmin())
                 ->requiresConfirmation()
                 ->action(function () {
                     $records = $this->getFilteredTableQuery()->get();

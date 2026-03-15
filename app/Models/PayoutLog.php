@@ -83,6 +83,12 @@ class PayoutLog extends Model
         return $this->belongsTo(PayoutMethod::class);
     }
 
+    // 🟢 Mối quan hệ: Đơn này nằm trong Phiếu lương nào?
+    public function userPayment()
+    {
+        return $this->belongsTo(UserPayment::class);
+    }
+
     public function account(): BelongsTo
     {
         // Giả sử Model của bạn là Account (Platform account)

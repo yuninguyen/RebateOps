@@ -502,13 +502,13 @@ trait HasAccountSchema
                     }),
 
                 //Hiển thị ghi chú (note) nếu có, dưới dạng chữ nhỏ màu xanh dương
-                TextColumn::make('note')
+                /* TextColumn::make('note')
                     ->label('Note')
                     ->alignment(Alignment::Center)
                     ->limit(10) // Giữ hiển thị ngắn gọn ngoài bảng
                     ->tooltip(fn($state) => $state) // Đây là nơi gửi dữ liệu xuống dòng vào Tooltip
                     ->html()
-                    ->formatStateUsing(fn($state) => nl2br(e($state)) ?? 'N/A'),
+                    ->formatStateUsing(fn($state) => nl2br(e($state)) ?? 'N/A'), */
 
                 // Hiển thị người đang giữ tài khoản
                 TextColumn::make('user.name')
@@ -892,6 +892,8 @@ trait HasAccountSchema
                         ->label('Export to Google Sheet')
                         ->icon('heroicon-o-table-cells')
                         ->color('success')
+                        // 🔒 KHÓA: Chỉ Admin mới thấy
+                        ->visible(fn() => auth()->user()?->isAdmin())
                         ->action(function (Collection $records) {
                             $sheetService = app(\App\Services\GoogleSheetService::class);
                             // FIX: Nhóm theo platform trước, rồi upsert từng tab 1 lần.

@@ -864,6 +864,9 @@ trait HasTrackerSchema
                         ->label('Export to Google Sheet')
                         ->icon('heroicon-o-table-cells')
                         ->color('success')
+                        // 🔒 KHÓA: Chỉ Admin mới thấy
+                        ->visible(fn() => auth()->user()?->isAdmin())
+                        ->requiresConfirmation()
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
                             $sheetService = app(\App\Services\GoogleSheetService::class);
 

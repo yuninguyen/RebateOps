@@ -19,6 +19,8 @@ class ListTopCashbackTrackers extends ListRecords
                 ->label('Sync All Data to Sheet')
                 ->icon('heroicon-o-arrow-path-rounded-square')
                 ->color('success')
+                // 🔒 KHÓA: Chỉ Admin mới thấy
+                ->visible(fn() => auth()->user()?->isAdmin())
                 ->requiresConfirmation()
                 ->modalHeading('Synchronize data to Google Sheets')
                 ->modalDescription('The system will synchronize all records currently displayed on the table (with filters applied) to Google Sheets. Are you sure you want to continue?')
@@ -70,7 +72,7 @@ class ListTopCashbackTrackers extends ListRecords
                 }),
 
             // 2. NÚT TẠO MỚI MẶC ĐỊNH CỦA FILAMENT (MÀU CAM)
-            Actions\CreateAction::make(),   
+            Actions\CreateAction::make(),
         ];
     }
 }
