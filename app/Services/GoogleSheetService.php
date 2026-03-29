@@ -76,7 +76,7 @@ class GoogleSheetService
                     'fields' => 'gridProperties.frozenRowCount',
                 ],
             ]),
-            // 2. In đậm hàng tiêu đề (A1:AC1)
+            // 2. In đậm hàng tiêu đề (A1:AC)
             new \Google\Service\Sheets\Request([
                 'repeatCell' => [
                     'range' => [
@@ -202,7 +202,7 @@ class GoogleSheetService
 
             $this->service->spreadsheets_values->clear(
                 $this->spreadsheetId,
-                "{$safeSheetName}!A1:AC1000",
+                "{$safeSheetName}!A1:AC",
                 new \Google\Service\Sheets\ClearValuesRequest()
             );
 

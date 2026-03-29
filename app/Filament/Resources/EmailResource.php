@@ -155,9 +155,9 @@ class EmailResource extends Resource
                     ->copyMessage('Copied email to clipboard!')
                     ->html()
                     ->formatStateUsing(function (Email $record): string {
-                        $email = $record->email;
-                        $twoFA = $record->two_factor_code ?? 'N/A'; // Nếu không có mã 2FA nào, hiển thị "N/A"
-                        $note = $record->note ?? 'N/A'; // Đồng bộ đúng trường 'note'
+                        $email = e($record->email);
+                        $twoFA = e($record->two_factor_code ?? 'N/A'); // Nếu không có mã 2FA nào, hiển thị "N/A"
+                        $note = e($record->note ?? 'N/A'); // Đồng bộ đúng trường 'note'
                         $dateCreate = $record->email_created_at instanceof \Carbon\Carbon
                             ? $record->email_created_at->format('d/m/Y')
                             : ($record->email_created_at ? \Carbon\Carbon::parse($record->email_created_at)->format('d/m/Y') : 'N/A');
@@ -447,11 +447,11 @@ class EmailResource extends Resource
 
                                 // Lấy năm từ email_created_at của Email, nếu không có thì lấy N/A
                                 $yearCreated = $record->email_created_at ? $record->email_created_at->format('Y') : 'N/A';
-                                $email = $record->email ?? 'N/A';
+                                $email = e($record->email); // Đảm bảo escape để tránh lỗi nếu email có ký tự đặc biệt
                                 $pass = $record->email_password ?? 'N/A';
                                 $recovery = $record->recovery_email ?? 'N/A';
-                                $twoFA = $record->two_factor_code ?? 'N/A';
-                                $note = $record->note ?? 'N/A';
+                                $twoFA = e($record->two_factor_code ?? 'N/A'); // Escape 2FA code để tránh lỗi nếu có ký tự đặc biệt
+                                $note = e($record->note ?? 'N/A'); // Đồng bộ đúng trường 'note'
                                 $provider = $record->provider ? ucfirst($record->provider) : 'Other';
                                 $usage = $record->accounts_count > 0 ? "{$record->accounts_count} Account(s)" : 'N/A';
                                 $platforms = $record->accounts->pluck('platform')->implode(', ') ?: 'N/A'; // Lấy danh sách platform đang dùng email này

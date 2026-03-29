@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Account;
 use App\Models\PayoutMethod;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\Activitylog\Traits\LogsActivity; // Bật tính năng Log
 use Spatie\Activitylog\LogOptions;          // Tùy chọn Log
@@ -64,13 +65,13 @@ class PayoutLog extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function children()
+    public function children(): HasMany
     {
         // Một dòng Rút tiền có thể có nhiều dòng Bán tiền (nếu bạn bán lẻ nhiều lần)
         return $this->hasMany(PayoutLog::class, 'parent_id');
     }
 
-    public function parent()
+    public function parent(): BelongsTo
     {
         // Dòng Bán tiền trỏ ngược về dòng Rút tiền gốc
         return $this->belongsTo(PayoutLog::class, 'parent_id');
@@ -84,7 +85,7 @@ class PayoutLog extends Model
     }
 
     // 🟢 Mối quan hệ: Đơn này nằm trong Phiếu lương nào?
-    public function userPayment()
+    public function userPayment(): BelongsTo
     {
         return $this->belongsTo(UserPayment::class);
     }

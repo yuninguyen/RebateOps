@@ -12,10 +12,11 @@ class AccountPolicy
      * Helper function để kiểm tra có phải Admin không.
      * Thay 'yuninguyen.it@gmail.com' bằng email bạn dùng để đăng ký tài khoản Filament.
      */
-    private function isAdmin(User $user): bool
+    /**private function isAdmin(User $user): bool
     {
         return $user->email === 'admin';
     }
+    */
 
     // Cấp toàn quyền cho Admin chặn trước mọi rules khác
     public function before(User $user, string $ability): bool|null
@@ -49,7 +50,7 @@ class AccountPolicy
      */
     public function create(User $user): bool
     {
-        return $this->isAdmin($user); // Chỉ admin mới thấy nút "New Account"
+        return $user->isAdmin(); // Chỉ admin mới thấy nút "New Account"
     }
 
     /**
@@ -57,7 +58,7 @@ class AccountPolicy
      */
     public function update(User $user, Account $account): bool
     {
-        return $this->isAdmin($user); // Chỉ admin mới được sửa (Edit)
+        return $user->isAdmin(); // Chỉ admin mới được sửa (Edit)
     }
 
     /**
@@ -65,7 +66,7 @@ class AccountPolicy
      */
     public function delete(User $user, Account $account): bool
     {
-        return $this->isAdmin($user); // Chỉ admin mới thấy nút xóa
+        return $user->isAdmin(); // Chỉ admin mới thấy nút xóa
     }
 
     /**
@@ -73,7 +74,7 @@ class AccountPolicy
      */
     public function restore(User $user, Account $account): bool
     {
-        return $this->isAdmin($user); // Chỉ admin mới được khôi phục
+        return $user->isAdmin(); // Chỉ admin mới được khôi phục
     }
 
     /**
@@ -81,6 +82,6 @@ class AccountPolicy
      */
     public function forceDelete(User $user, Account $account): bool
     {
-        return $this->isAdmin($user); // Chỉ admin mới được xóa vĩnh viễn
+        return $user->isAdmin(); // Chỉ admin mới được xóa vĩnh viễn
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\Activitylog\Traits\LogsActivity; // Bật tính năng Log
 use Spatie\Activitylog\LogOptions;          // Tùy chọn Log
@@ -69,7 +70,7 @@ class Account extends Model
     /**
      * Khai báo mối quan hệ với bảng RebateTracker
      */
-    public function rebateTrackers()
+    public function rebateTrackers(): HasMany
     {
         // Hãy chắc chắn 'account_id' là tên cột thực tế trong bảng rebate_trackers
         return $this->hasMany(\App\Models\RebateTracker::class, 'account_id');
@@ -93,7 +94,7 @@ class Account extends Model
         return $this->belongsTo(Email::class, 'email_id');
     }
 
-    public function payoutLogs()
+    public function payoutLogs(): HasMany
     {
         return $this->hasMany(\App\Models\PayoutLog::class, 'account_id');
     }

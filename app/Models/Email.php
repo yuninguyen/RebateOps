@@ -14,7 +14,7 @@ class Email extends Model
     use SoftDeletes;
 
 
-    public $timestamps = false; // Tắt tự động cập nhật created_at và updated_at
+    //public $timestamps = false; // Tắt tự động cập nhật created_at và updated_at
 
     // Cho phép lưu các cột này vào database
     protected $fillable = [

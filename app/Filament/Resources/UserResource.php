@@ -64,7 +64,7 @@ class UserResource extends Resource
                                 'admin' => 'Admin',
                                 'staff' => 'Staff',
                             ])
-                            ->default('holder')
+                            ->default('staff')
                             ->required()
                             ->native(false),
                         Forms\Components\TextInput::make('password')
