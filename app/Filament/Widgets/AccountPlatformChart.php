@@ -28,7 +28,9 @@ protected function getData(): array
     {
         $query = Account::query();
 
-        if ($this->selectedUser) {
+        if (!auth()->user()?->isAdmin()) {
+            $query->where('user_id', auth()->id());
+        } elseif ($this->selectedUser) {
             $query->join('users', 'accounts.user_id', '=', 'users.id')
                 ->where('users.name', $this->selectedUser);
         }
@@ -58,7 +60,11 @@ protected function getData(): array
 
     public function getDescription(): ?HtmlString
     {
-        $totalAccounts = Account::count();
+        $query = Account::query();
+        if (!auth()->user()?->isAdmin()) {
+            $query->where('user_id', auth()->id());
+        }
+        $totalAccounts = (clone $query)->count();
 
         if ($this->selectedUser) {
             $platforms = Account::query()
@@ -91,7 +97,12 @@ protected function getData(): array
                 </div>");
         }
 
-        $users = User::withCount('accounts')->get();
+        $usersQuery = User::query();
+        if (!auth()->user()?->isAdmin()) {
+            $usersQuery->where('id', auth()->id());
+        }
+        $users = $usersQuery->withCount('accounts')->get();
+
         $userHtml = $users->map(function ($user) {
             return "
                 <div style='display: flex; flex-direction: column; cursor: pointer;' wire:click=\"onUserClicked('{$user->name}')\">

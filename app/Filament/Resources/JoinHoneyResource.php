@@ -37,7 +37,16 @@ class JoinHoneyResource extends Resource
     // HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Join Honey
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->where('platform', 'JoinHoney');
+        $query = parent::getEloquentQuery()->where('platform', 'JoinHoney');
+
+        if (auth()->user()?->isAdmin()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) {
+            $q->where('user_id', auth()->id())
+              ->orWhereNull('user_id');
+        });
     }
 
     protected function getRedirectUrl(): string

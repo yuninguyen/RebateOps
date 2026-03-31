@@ -7,6 +7,7 @@ use App\Policies\AccountPolicy; // Thêm dòng này
 use Illuminate\Support\Facades\Gate; // Thêm dòng này
 use Illuminate\Support\ServiceProvider;
 use Spatie\Activitylog\Models\Activity;
+use BezhanSalleh\FilamentLanguageSwitch\LanguageSwitch;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,6 +24,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        LanguageSwitch::configureUsing(function (LanguageSwitch $switch) {
+            $switch->locales(['en', 'vi']);
+        });
+
+        // 🟢 TIÊU CHUẨN HÓA TIỀN TỆ: Ép hệ thống dùng chuẩn tiếng Anh (USD -> $) bất kể ngôn ngữ giao diện là gì
+        \Illuminate\Support\Number::useLocale('en_US');
+
         // Đăng ký Policy tại đây
         Gate::policy(Account::class, AccountPolicy::class);
         // 🟢 KHÓA CHẶT: Chỉ cho phép Admin xem bất cứ thứ gì liên quan đến Activity Log

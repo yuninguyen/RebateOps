@@ -12,6 +12,26 @@ class Dashboard extends BaseDashboard
         return 2;
     }
 
+    // 🟢 Dynamic welcome heading
+    public function getHeading(): string
+    {
+        $hour = (int) now()->format('H');
+        $greeting = match (true) {
+            $hour < 12 => 'Good morning',
+            $hour < 18 => 'Good afternoon',
+            default    => 'Good evening',
+        };
+
+        $name = auth()->user()?->name ?? 'there';
+
+        return "{$greeting}, {$name} 👋";
+    }
+
+    public function getSubheading(): ?string
+    {
+        return 'Here\'s your operations overview for today.';
+    }
+
     public function getWidgets(): array
     {
         return [

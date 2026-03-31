@@ -25,6 +25,13 @@ class EmailResource extends Resource
 
     protected static ?string $model = Email::class;
 
+    // 🟢 DRY: Status labels dùng chung cho toàn bộ Resource
+    public const STATUS_LABELS = [
+        'active' => 'Live',
+        'disabled' => 'Disabled',
+        'locked' => 'Locked',
+    ];
+
     // Đổi sang icon phong bì cho Email
     protected static ?string $navigationIcon = 'heroicon-o-envelope';
 
@@ -47,6 +54,17 @@ class EmailResource extends Resource
         return $query->whereHas('accounts', fn($q) => $q->where('user_id', auth()->id()));
     }
 
+    // 🟢 KHÓA QUYỀN XÓA ĐỐI VỚI NHÂN VIÊN
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return (bool) auth()->user()?->isAdmin();
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return (bool) auth()->user()?->isAdmin();
+    }
+
     // Thêm dòng này để hệ thống ghi nhớ bộ lọc vào Session
     public static function shouldPersistTableFiltersInSession(): bool
     {
@@ -58,12 +76,13 @@ class EmailResource extends Resource
         return $form
             ->schema([
                 // Gom nhóm vào Section để giao diện đồng bộ với bên Accounts
-                Forms\Components\Section::make('Chi tiết Email gốc')
+                Forms\Components\Section::make(__('system.email_detail_section'))
                     ->schema([
                         Forms\Components\TextInput::make('email')
                             ->label('Email Address')
                             ->email()
                             ->required()
+                            ->disabled(fn() => !auth()->user()?->isAdmin()) // 🟢 Khóa đối với nhân viên
                             ->unique(ignoreRecord: true) // Kiểm tra trùng lặp và báo lỗi thân thiện
                             ->validationMessages([
                                 'unique' => 'This email already exists in the system.',
@@ -75,29 +94,34 @@ class EmailResource extends Resource
 
                         Forms\Components\TextInput::make('recovery_email')
                             ->label('Recovery Email')
+                            ->disabled(fn() => !auth()->user()?->isAdmin()) // 🟢 Khóa
                             ->email(),
 
                         Forms\Components\TextInput::make('two_factor_code')
-                            ->label('2FA Code/Recovery code'),
+                            ->label('2FA Code/Recovery code')
+                            ->disabled(fn() => !auth()->user()?->isAdmin()), // 🟢 Khóa
 
-                        Forms\Components\select::make('status')
+                        Forms\Components\Select::make('status')
                             ->label('Status')
-                            ->formatStateUsing(fn(string $state): string => match ($state) {
+                            ->options([
                                 'active' => 'Live',
                                 'disabled' => 'Disabled',
                                 'locked' => 'Locked',
-                            })
+                                'default' => 'N/A'
+                            ])
                             ->default('active')
                             ->required()
+                            ->disabled(fn() => !auth()->user()?->isAdmin()) // 🟢 Khóa
                             ->native(false),
 
-                        Forms\Components\TextInput::make('email_created_at')
+                        Forms\Components\DatePicker::make('email_created_at')
                             ->label('Date Created')
                             ->placeholder('dd/mm/yyyy')
                             ->displayFormat('d/m/Y') // Định dạng hiển thị khi nhập
                             ->format('Y-m-d') // Định dạng chuẩn để lưu vào MySQL
-                            ->native(true) // Dùng giao diện hiện đại của Filament
+                            ->native(false) // Dùng giao diện hiện đại của Filament thay vì native
                             ->dehydrated(true) // Đảm bảo trường này được gửi về backend
+                            ->disabled(fn() => !auth()->user()?->isAdmin()) // 🟢 Khóa
                             ->default(null) // Đảm bảo không tự động lấy ngày hôm nay làm mặc định
                             ->live(),  // Đồng bộ dữ liệu ngay lập tức,
 
@@ -128,15 +152,9 @@ class EmailResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->alignment(Alignment::Center)
-                    ->copyable()
                     ->searchable()
                     ->toggleable() // Cho phép ẩn/hiện cột này
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
-                        'active' => 'Live',
-                        'disabled' => 'Disabled',
-                        'locked' => 'Locked',
-                        default => 'N/A', // Hiện N/A nếu chưa check mail
-                    })
+                    ->formatStateUsing(fn(string $state): string => static::STATUS_LABELS[$state] ?? static::STATUS_LABELS[strtolower($state)] ?? 'N/A')
                     ->color(fn(string $state): string => match ($state) {
                         'active' => 'success',
                         'disabled' => 'warning',
@@ -204,7 +222,6 @@ class EmailResource extends Resource
                 Tables\Columns\TextColumn::make('provider')
                     ->label('Provider')
                     ->alignment(Alignment::Center)
-                    ->copyable()
                     ->searchable()
                     ->toggleable()
                     // Tự động viết hoa chữ cái đầu (outlook -> Outlook)
@@ -219,7 +236,6 @@ class EmailResource extends Resource
                     ->formatStateUsing(fn($state) => $state > 0 ? "{$state} Account(s)" : 'N/A')
                     ->color(fn($state) => $state > 0 ? 'success' : 'secondary')
                     ->wrap()
-                    ->copyable()
                     ->searchable()
                     ->toggleable(), // Cho phép ẩn/hiện cột này
 
@@ -229,7 +245,6 @@ class EmailResource extends Resource
                     ->placeholder('N/A') // Nếu không có tài khoản nào đang dùng email này
                     ->alignment(Alignment::Center)
                     ->formatStateUsing(fn($state) => is_array($state) ? implode(', ', $state) : $state) // Nếu có nhiều platform sẽ nối bằng dấu phẩy
-                    ->copyable()
                     ->searchable()
                     ->toggleable(), // Cho phép ẩn/hiện cột này 
             ])
@@ -302,21 +317,7 @@ class EmailResource extends Resource
                             //  Khai báo Header
                             $header = " | ID | Status | Year Create | Email Address | Email Password | Recovery Email | 2FA Code | Email Note | Provider | Usage | Platforms | ";
                             $id = $record->id;
-                            $emailStatus = $record->status ?? 'N/A'; // Lấy Status từ bảng Email
-                            $emailstatusLabels = [
-                                'active' => 'Live',
-                                'disabled' => 'Disabled',
-                                'locked'   => 'Locked',
-                            ];
-                            // Chuyển mảng status (nếu có nhiều status) thành chuỗi nhãn đẹp
-                            $currentemailStatuses = is_array($record->status) ? $record->status : explode(',', (string)$record->status);
-
-                            $emailStatus = collect($currentemailStatuses)
-                                ->map(function ($s) use ($emailstatusLabels) {
-                                    $key = trim($s); // Loại bỏ khoảng trắng thừa nếu có
-                                    return $emailstatusLabels[$key] ?? ucfirst($key);
-                                })
-                                ->join(', '); // Kết quả: "Active, Locked" hoặc "Disabled"
+                            $emailStatus = static::STATUS_LABELS[$record->status] ?? ucfirst($record->status ?? 'N/A');
 
                             // Lấy năm từ email_created_at của Email, nếu không có thì lấy N/A
                             $yearCreated = $record->email_created_at ? $record->email_created_at->format('Y') : 'N/A';
@@ -405,6 +406,7 @@ class EmailResource extends Resource
                         ->label('Clear Date Create Selected')
                         ->icon('heroicon-o-trash')
                         ->color('danger')
+                        ->visible(fn() => auth()->user()?->isAdmin()) // 🟢 KHÓA ĐỐI VỚI STAFF
                         ->requiresConfirmation() // Hỏi lại cho chắc chắn
                         ->action(fn(\Illuminate\Database\Eloquent\Collection $records) => $records->each->update(['email_created_at' => null])),
 
@@ -429,21 +431,7 @@ class EmailResource extends Resource
                             foreach ($records as $index => $record) {
                                 // Lấy dữ liệu từng dòng
                                 $id = $record->id;
-                                $emailStatus = $record->status ?? 'N/A'; // Lấy Status từ bảng Email
-                                $emailstatusLabels = [
-                                    'active' => 'Live',
-                                    'disabled' => 'Disabled',
-                                    'locked'   => 'Locked',
-                                ];
-                                // Chuyển mảng status (nếu có nhiều status) thành chuỗi nhãn đẹp
-                                $currentStatuses = is_array($record->status) ? $record->status : explode(',', (string)$record->status);
-
-                                $emailStatus = collect($currentStatuses)
-                                    ->map(function ($s) use ($emailstatusLabels) {
-                                        $key = trim($s); // Loại bỏ khoảng trắng thừa nếu có
-                                        return $emailstatusLabels[$key] ?? ucfirst($key);
-                                    })
-                                    ->join(', '); // Kết quả: "Active, Locked" hoặc "Disabled"
+                                $emailStatus = static::STATUS_LABELS[$record->status] ?? ucfirst($record->status ?? 'N/A');
 
                                 // Lấy năm từ email_created_at của Email, nếu không có thì lấy N/A
                                 $yearCreated = $record->email_created_at ? $record->email_created_at->format('Y') : 'N/A';

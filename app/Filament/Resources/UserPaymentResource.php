@@ -22,8 +22,22 @@ class UserPaymentResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
     protected static ?string $navigationGroup = 'WALLET & PAYOUTS';
-    protected static ?string $navigationLabel = 'Settlement/Reconciliation';
     protected static ?int $navigationSort = 3;
+
+    public static function getNavigationLabel(): string
+    {
+        return __('system.revenue_split');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('system.revenue_split');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('system.revenue_split_list');
+    }
 
     // 🟢 1. PHÂN QUYỀN DỮ LIỆU: Staff chỉ thấy lương của mình
     public static function getEloquentQuery(): Builder
@@ -110,25 +124,24 @@ class UserPaymentResource extends Resource
                     ->label('Total USD')
                     ->money('USD') // Tự format có chữ $
                     ->color('success')
-                    ->alignment(Alignment::Center)
-                    ->sortable(),
+                    ->alignment(Alignment::Center),
 
                 Tables\Columns\TextColumn::make('total_vnd')
                     ->label('Total (VND)')
                     ->money('VND', locale: 'vi_VN') // Tự format 25.000.000 ₫
                     ->color('primary')
                     ->weight('bold')
-                    ->alignment(Alignment::Center)
-                    ->sortable(),
+                    ->alignment(Alignment::Center),
 
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->alignment(Alignment::Center)
                     ->badge()
-                    ->colors([
-                        'warning' => 'pending',
-                        'success' => 'paid',
-                    ])
+                    ->color(fn(string $state): string => match ($state) {
+                        'pending' => 'warning',
+                        'paid' => 'success',
+                        default => 'gray',
+                    })
                     ->formatStateUsing(fn(string $state): string => match ($state) {
                         'pending' => 'Pending',
                         'paid' => 'Paid',
@@ -136,7 +149,7 @@ class UserPaymentResource extends Resource
                     }),
 
                 Tables\Columns\TextColumn::make('created_at')
-                    ->label('Settlement Date')
+                    ->label('Date')
                     ->dateTime('d/m/Y H:i')
                     ->alignment(Alignment::Center),
             ])

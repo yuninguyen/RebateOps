@@ -33,7 +33,11 @@ class PayoutStats extends BaseWidget
         $query = PayoutLog::query();
 
         // 3. QUAN TRỌNG: Nếu có User được chọn, hãy lọc dữ liệu của User đó
-        if ($this->selectedUserId) {
+        if (!auth()->user()?->isAdmin()) {
+            $query->whereHas('account', function ($q) {
+                $q->where('user_id', auth()->id());
+            });
+        } elseif ($this->selectedUserId) {
             $query->whereHas('account', function ($q) {
                 $q->where('user_id', $this->selectedUserId);
             });

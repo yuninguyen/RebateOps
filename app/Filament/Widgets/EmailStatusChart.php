@@ -17,10 +17,15 @@ class EmailStatusChart extends ChartWidget
     
     protected function getData(): array
     {
+        $query = Email::query();
+        if (!auth()->user()?->isAdmin()) {
+            $query->whereHas('accounts', fn($q) => $q->where('user_id', auth()->id()));
+        }
+
         // 1. Lấy số lượng thực tế
-        $live = Email::where('status', 'active')->count();
-        $locked = Email::where('status', 'locked')->count();
-        $disabled = Email::where('status', 'disabled')->count();
+        $live = (clone $query)->where('status', 'active')->count();
+        $locked = (clone $query)->where('status', 'locked')->count();
+        $disabled = (clone $query)->where('status', 'disabled')->count();
         $total = $live + $locked + $disabled;
 
         // 2. Tính toán phần trăm (%)
@@ -55,10 +60,15 @@ class EmailStatusChart extends ChartWidget
      */
     public function getDescription(): ?HtmlString
     {
-        $live = Email::where('status', 'active')->count();
-        $locked = Email::where('status', 'locked')->count();
-        $disabled = Email::where('status', 'disabled')->count();
-        $total = Email::count();
+        $query = Email::query();
+        if (!auth()->user()?->isAdmin()) {
+            $query->whereHas('accounts', fn($q) => $q->where('user_id', auth()->id()));
+        }
+
+        $live = (clone $query)->where('status', 'active')->count();
+        $locked = (clone $query)->where('status', 'locked')->count();
+        $disabled = (clone $query)->where('status', 'disabled')->count();
+        $total = (clone $query)->count();
 
         return new HtmlString("
         <div class='mt-2 space-y-3'>

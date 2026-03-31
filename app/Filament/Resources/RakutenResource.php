@@ -35,7 +35,16 @@ class RakutenResource extends Resource
     // HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Rakuten
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->where('platform', 'Rakuten');
+        $query = parent::getEloquentQuery()->where('platform', 'Rakuten');
+
+        if (auth()->user()?->isAdmin()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) {
+            $q->where('user_id', auth()->id())
+              ->orWhereNull('user_id');
+        });
     }
 
     protected function getRedirectUrl(): string

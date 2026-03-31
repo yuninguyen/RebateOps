@@ -22,7 +22,7 @@ class PayoutLog extends Model
         'account_id',           // Tài khoản nguồn
         'payout_method_id',     // Ví nhận tiền/Ví bán tiền
         'parent_id',            // 🟢 MỚI: Liên kết dòng Liquidation với Withdrawal gốc
-
+        'user_payment_id',      // 🟢 MỚI: Liên kết dòng Withdrawal với Phiếu lương
         // --- Phân loại & Trạng thái ---
         'asset_type',           // 'currency' hoặc 'gift_card'
         'transaction_type',     // 🟢 Withdrawal / Liquidation (Dùng để tính Balance)

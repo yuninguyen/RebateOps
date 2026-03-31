@@ -37,7 +37,16 @@ class ActiveJunkyResource extends Resource
     // HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Active Junky
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->where('platform', 'Active Junky');
+        $query = parent::getEloquentQuery()->where('platform', 'Active Junky');
+
+        if (auth()->user()?->isAdmin()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) {
+            $q->where('user_id', auth()->id())
+              ->orWhereNull('user_id');
+        });
     }
 
     public static function getRelations(): array

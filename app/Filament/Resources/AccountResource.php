@@ -51,6 +51,22 @@ class AccountResource extends Resource
     // Thêm dòng này để Account nằm dưới Email
     protected static ?int $navigationSort = 2;
 
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        // Admin được xem toàn bộ
+        if (auth()->user()?->isAdmin()) {
+            return $query;
+        }
+
+        // Staff chỉ xem được account của chính họ hoặc account chưa gán cho ai
+        return $query->where(function (Builder $q) {
+            $q->where('user_id', auth()->id())
+              ->orWhereNull('user_id');
+        });
+    }
+
     protected function getRedirectUrl(): string
     {
         // Quay về trang danh sách (List View)

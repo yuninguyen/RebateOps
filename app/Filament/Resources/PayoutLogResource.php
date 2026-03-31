@@ -34,27 +34,56 @@ class PayoutLogResource extends Resource
     {
         // 1. Lấy query gốc (đã bao gồm xử lý SoftDeletes)
         $query = parent::getEloquentQuery()
-            ->withCount('children');
+            ->withCount('children')
+            // 🟢 TỐI ƯU: Chỉ lấy ngày exchange gần nhất thay vì load toàn bộ children vào RAM
+            ->addSelect(['exchanged_at' => \App\Models\PayoutLog::select('created_at')
+                ->whereColumn('parent_id', 'payout_logs.id')
+                ->latest()
+                ->limit(1),
+            ]);
 
         // 2. Khóa chặt thứ tự sắp xếp Cha - Con (Đã fix lỗi SQL Sum cho Sếp)
         $query->orderByRaw('COALESCE(parent_id, id) DESC')->orderBy('id', 'ASC');
 
         $user = auth()->user();
 
-        // 3. KIỂM TRA QUYỀN ADMIN (Sếp kiểm tra lại method isAdmin trong Model User nhé)
-        if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {
+        // 3. KIỂM TRA QUYỀN ADMIN
+        if ($user?->isAdmin()) {
             return $query;
         }
 
         // 4. CHỐT CHẶN BẢO MẬT CHO STAFF
-        // Staff chỉ được thấy đơn do mình tạo HOẶC đơn con của đơn do mình tạo
-        return $query->where(function (Builder $q) use ($user) {
-            $q->where('user_id', $user->id) // Đơn do mình sở hữu
-                ->orWhereHas('parent', function ($parentQuery) use ($user) {
-                    // HOẶC đơn con mà đơn Cha của nó thuộc về mình
-                    $parentQuery->where('user_id', $user->id);
-                });
-        });
+        // Cụ thể: Ẩn transaction currency exchange (đơn con) khỏi Staff
+        return $query->where('user_id', $user->id);
+    }
+
+    // 🟢 KHÓA QUYỀN SỬA ĐỐI VỚI NHÂN VIÊN KHI ĐƠN ĐÃ ĐƯỢC EXCHANGE (CÓ ĐƠN CON)
+    public static function canEdit(Model $record): bool
+    {
+        if (auth()->user()?->isAdmin()) {
+            return true;
+        }
+
+        // Dùng children_count (đã eager load từ getEloquentQuery) thay vì children()->count() để tránh N+1
+        if ($record->children_count > 0) {
+            return false;
+        }
+
+        return true;
+    }
+
+    // Khóa luôn quyền Xóa nếu đơn đã Exchange để tránh trường hợp xóa chui
+    public static function canDelete(Model $record): bool
+    {
+        if (auth()->user()?->isAdmin()) {
+            return true;
+        }
+
+        if ($record->children_count > 0) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -214,6 +243,15 @@ class PayoutLogResource extends Resource
                             ->formatStateUsing(fn($state) => ucfirst($state)),
                         Infolists\Components\TextEntry::make('account.email.email')
                             ->label('Source Account'),
+                        Infolists\Components\TextEntry::make('payment_status')
+                            ->label('Disbursement')
+                            ->getStateUsing(fn($record) => $record->user_payment_id ? 'Paid' : 'Unpaid')
+                            ->badge()
+                            ->color(fn(string $state): string => match ($state) {
+                                'Paid' => 'success',
+                                'Unpaid' => 'danger',
+                                default => 'secondary',
+                            }),
                         Infolists\Components\TextEntry::make('payoutMethod.name')
                             ->label('Target Wallet')
                             // 🟢 CHỈ HIỆN NẾU LÀ PAYPAL
@@ -852,24 +890,31 @@ class PayoutLogResource extends Resource
                     // --- Description: Luôn hiện chữ Sell to VND cho dòng Withdrawal ---
                     ->description(function ($record): ?\Illuminate\Support\HtmlString {
                         // 🟢 FIX N+1: Dùng children_count thay vì children()->count()
+                        $isAdmin = auth()->user()?->isAdmin();
                         if (in_array($record->transaction_type, ['withdrawal', 'hold']) && $record->children_count === 0) {
-                            return new \Illuminate\Support\HtmlString(
-                                '<span style="color: #FF9F40; font-weight: bold; cursor: pointer; display: block; margin-top: 4px;">$ Exchange to VND</span>'
-                            );
+                            if ($isAdmin) {
+                                return new \Illuminate\Support\HtmlString(
+                                    '<span style="color: #FF9F40; font-weight: bold; cursor: pointer; display: block; margin-top: 4px;">$ Exchange to VND</span>'
+                                );
+                            }
+                            return null;
                         }
 
                         // Nếu đã bán rồi, có thể hiện nhãn "Đã thanh khoản" màu xám nhẹ cho chuyên nghiệp
-                        // 🟢 FIX N+1
                         if ($record->children_count > 0) {
+                            $childDate = '';
+                            if ($record->exchanged_at) {
+                                $childDate = ' ' . \Carbon\Carbon::parse($record->exchanged_at)->format('d/m/Y');
+                            }
                             return new \Illuminate\Support\HtmlString(
-                                '<span style="color: #94a3b8; font-size: 11px;">(Exchanged!)</span>'
+                                '<span style="color: #94a3b8; font-size: 11px;">(Exchanged!'.$childDate.')</span>'
                             );
                         }
                         return null;
                     })
                     ->extraAttributes(function ($record) {
-                        // 🟢 FIX N+1: Chặn click nếu đã bán rồi
-                        if (in_array($record->transaction_type, ['withdrawal', 'hold']) && $record->children_count === 0) {
+                        // 🟢 FIX N+1: Chặn click nếu đã bán rồi và chỉ Admin mới được bấm
+                        if (auth()->user()?->isAdmin() && in_array($record->transaction_type, ['withdrawal', 'hold']) && $record->children_count === 0) {
                             return [
                                 'class' => 'cursor-pointer transition hover:opacity-70',
                                 'wire:click.stop' => "mountTableAction('currency_exchange', '{$record->id}')",
@@ -920,13 +965,13 @@ class PayoutLogResource extends Resource
                     ->formatStateUsing(fn(string $state): string => ucfirst($state)),
 
                 Tables\Columns\TextColumn::make('payment_status')
-                    ->label('Settlement') // Đổi từ Chốt sổ
-                    ->getStateUsing(fn($record) => $record->user_payment_id ? 'Settled' : 'Unsettled') // Settled: Đã chốt, Unsettled: Chưa chốt
+                    ->label('Disbursement') // Đổi từ Chốt sổ
+                    ->getStateUsing(fn($record) => $record->user_payment_id ? 'Paid' : 'Unpaid') // Paid: Đã chốt, Unpaid: Chưa chốt
                     ->badge()
                     ->alignment(Alignment::Center)
                     ->color(fn(string $state): string => match ($state) {
-                        'Settled' => 'success',
-                        'Unsettled' => 'danger',
+                        'Paid' => 'success',
+                        'Unpaid' => 'danger',
                         default => 'secondary',
                     }),
 
@@ -987,11 +1032,11 @@ class PayoutLogResource extends Resource
                         'rejected' => 'Rejected',
                     ]),
 
-                Tables\Filters\TernaryFilter::make('is_settled')
-                    ->label('Settlement Status') // Đổi từ Trạng thái Chốt sổ
+                Tables\Filters\TernaryFilter::make('user_payment_id')
+                    ->label('Disbursement Status') // Đổi từ Trạng thái Chốt sổ
                     ->placeholder('All Records')
-                    ->trueLabel('✅ Settled') // Đã chốt
-                    ->falseLabel('⏳ Unsettled') // Chưa chốt
+                    ->trueLabel('✅ Paid') // Đã chốt
+                    ->falseLabel('⏳ Unpaid') // Chưa chốt
                     ->queries(
                         true: fn(Builder $query) => $query->whereNotNull('user_payment_id'),
                         false: fn(Builder $query) => $query->whereNull('user_payment_id'),
@@ -1063,7 +1108,7 @@ class PayoutLogResource extends Resource
             // THÊM DÒNG NÀY ĐỂ ĐƯA FILTER RA NGOÀI:
             ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContent)
             // 🟢 THAY ĐỔI DÒNG NÀY: Admin hiện 3 cột, Staff hiện 5 cột
-            ->filtersFormColumns(auth()->user()?->isAdmin() ? 4 : 5) // QUAN TRỌNG: Tổng Layout là 3 cột (Status [1] + Date [2] = 3)
+            ->filtersFormColumns(auth()->user()?->isAdmin() ? 4 : 3) // QUAN TRỌNG: Tổng Layout là 3 cột (Status [1] + Date [2] = 3)
             ->actions([
                 //Nút Exchange to VND ở cột Transaction Type
                 Tables\Actions\Action::make('currency_exchange')
@@ -1082,8 +1127,8 @@ class PayoutLogResource extends Resource
                         'total_vnd' => $record->net_amount_usd * 20000,
                     ]))
 
-                    // 🟢 Bỏ check diffInDays, chỉ cần là withdrawal, hold là cho hiện
-                    ->visible(fn($record) => in_array($record->transaction_type, ['withdrawal', 'hold']))
+                    // 🟢 Bỏ check diffInDays, chỉ cần là withdrawal, hold là cho hiện (Chỉ Admin)
+                    ->visible(fn($record) => auth()->user()?->isAdmin() && in_array($record->transaction_type, ['withdrawal', 'hold']))
                     ->form([
                         Forms\Components\TextInput::make('net_amount_usd')
                             ->label('Net USD')
@@ -1346,13 +1391,20 @@ class PayoutLogResource extends Resource
                     Tables\Actions\RestoreBulkAction::make(),     // 🟢 Khôi phục nhiều dòng
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
-            ]);;
+            ]);
     }
 
-    // 🟢 HÀM HELPER: Tính số dư khả dụng duy nhất tại đây (DRY)
+    // 🟢 HÀM HELPER: Tính số dư khả dụng duy nhất tại đây (DRY) + Cache per-request
+    protected static array $balanceCache = [];
+
     public static function getAvailableBalance($accountId): float
     {
         if (!$accountId) return 0.0;
+
+        // 🟢 Cache kết quả trong suốt 1 request để tránh query lặp lại
+        if (isset(static::$balanceCache[$accountId])) {
+            return static::$balanceCache[$accountId];
+        }
 
         $confirmed = \App\Models\RebateTracker::where('account_id', $accountId)
             ->whereIn('status', ['confirmed'])
@@ -1363,7 +1415,7 @@ class PayoutLogResource extends Resource
             ->where('status', 'completed')
             ->sum('amount_usd') ?? 0;
 
-        return max(0, $confirmed - $paid);
+        return static::$balanceCache[$accountId] = max(0, $confirmed - $paid);
     }
 
     // Cập nhật hàm tính toán USD

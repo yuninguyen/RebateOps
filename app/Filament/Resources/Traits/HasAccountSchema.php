@@ -491,7 +491,7 @@ trait HasAccountSchema
                             'linked' => 'Đã liên kết thành công với PayPal Account.',
                             'unlinked' => 'Đã gỡ liên kết PayPal khỏi tài khoản này.',
                             'not_linked' => 'Tài khoản chưa được liên kết với PayPal.',
-                            'no_paypal_needed' => 'Không yêu link PayPal.',
+                            'no_paypal_needed' => 'Không yêu cầu liên kết với PayPal.',
                         ];
 
                         // Duyệt qua các trạng thái hiện có và lấy giải thích tương ứng
@@ -512,10 +512,10 @@ trait HasAccountSchema
 
                 // Hiển thị người đang giữ tài khoản
                 TextColumn::make('user.name')
-                    ->label('Holder')
+                    ->label(__('system.holder'))
                     ->alignment(Alignment::Center)
                     // Nếu chưa có người nhận (null), chúng sẽ hiển thị N/A
-                    ->default('N/A')
+                    ->default(__('system.unassigned'))
 
                     ->color(fn(Account $record) => $record->user_id === null ? 'gray' : 'default')
                     ->html()
@@ -523,7 +523,7 @@ trait HasAccountSchema
                     ->description(function (Account $record): ?\Illuminate\Support\HtmlString {
                         if ($record->user_id === null) {
                             return new \Illuminate\Support\HtmlString(
-                                '<span class = "get-account-btn">Get account</span>'
+                                '<span class = "get-account-btn">' . __('system.get_account') . '</span>'
                             );
                         }
                         return null;
@@ -628,7 +628,7 @@ trait HasAccountSchema
                     ->label('Account Ownership')
                     ->placeholder('All Accounts')
                     ->trueLabel('My Accounts')
-                    ->falseLabel('Unassigned')
+                    ->falseLabel(__('system.unassigned'))
                     ->queries(
                         true: fn(Builder $query) => $query->where('user_id', auth()->id()),
                         false: fn(Builder $query) => $query->whereNull('user_id'),
@@ -646,7 +646,7 @@ trait HasAccountSchema
                             ->where('name', '!=', '') // Loại bỏ chuỗi rỗng
                             ->pluck('name', 'id')
                             ->map(fn($name) => (string) $name) // Ép kiểu string chắc chắn
-                            ->prepend('N/A (Chưa có Holder)', 'unassigned') // Thêm N/A vào đầu danh sách
+                            ->prepend(__('system.unassigned'), 'unassigned') // Thêm N/A vào đầu danh sách
                             ->toArray();
                     })
 
@@ -676,18 +676,74 @@ trait HasAccountSchema
             ->actions([
                 // Hành động ẩn xử lý khi bấm vào chữ Get account từ cột Holder
                 Tables\Actions\Action::make('get_account')
-                    ->label('Get account')
+                    ->label(__('system.get_account'))
                     // Không dùng hidden() hay visible(false) vì sẽ gây lỗi khi gọi
                     // Ẩn bằng CSS nhưng Action vẫn tồn tại trong hệ thống
                     ->extraAttributes([
                         'style' => 'display: none !important;',
                     ])
-                    // GIỮ NGUYÊN LOGIC NHẬN DIỆN USER CỦA BẠN
-                    ->action(function (Account $record) {
+                    ->modalHeading(__('system.account_claim_title'))
+                    ->modalWidth('md')
+                    ->form(function (Account $record) {
+                        $emailAddress = strtolower($record->email?->email ?? '');
+                        $isGmail = str_ends_with($emailAddress, '@gmail.com');
+                        
+                        if ($isGmail) {
+                            $warningTitle = __('system.gmail_warning_title');
+                            $warningDesc = __('system.gmail_warning_desc');
+                            
+                            return [
+                                Forms\Components\Placeholder::make('warning')
+                                    ->label('')
+                                    ->content(new \Illuminate\Support\HtmlString('
+                                        <div style="color: #dc2626; font-weight: bold; padding: 12px; background-color: #fef2f2; border-radius: 8px; border: 1px solid #fecaca; font-size: 14px; line-height: 1.5;">
+                                            ⚠️ ' . $warningTitle . '<br>
+                                            <span style="font-weight: 500; color: #991b1b; font-size: 13px;">' . $warningDesc . '</span>
+                                        </div>
+                                    ')),
+                                Forms\Components\Checkbox::make('verified')
+                                    ->label(__('system.gmail_checkbox'))
+                                    ->required()
+                                    ->accepted()
+                                    ->validationMessages([
+                                        'accepted' => __('system.gmail_checkbox_validation')
+                                    ]),
+                            ];
+                        }
+                        
+                        return [
+                            Forms\Components\Placeholder::make('msg')
+                                ->label('')
+                                ->content(new \Illuminate\Support\HtmlString(__('system.account_claim_desc'))),
+                        ];
+                    })
+                    ->modalSubmitActionLabel(__('system.account_claim_submit'))
+                    ->action(function (Account $record, array $data) {
+                        // Kiểm tra nếu tài khoản đang bị Banned thì báo lỗi
+                        $statuses = is_array($record->status) ? $record->status : [$record->status];
+                        
+                        if (in_array('banned', $statuses)) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Cannot claim a Banned account!')
+                                ->danger()
+                                ->send();
+                            return;
+                        }
+
+                        // Kiểm tra nếu tài khoản chưa liên kết PayPal
+                        if (in_array('not_linked', $statuses)) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Cannot claim! This account is not linked to PayPal.')
+                                ->warning()
+                                ->send();
+                            return;
+                        }
+
+                        // update
                         $record->update(['user_id' => auth()->id()]);
 
                         \Filament\Notifications\Notification::make()
-                            ->title('Account claimed successfully!')
+                            ->title(__('system.account_claimed_success'))
                             ->success()
                             ->send();
                     }),
