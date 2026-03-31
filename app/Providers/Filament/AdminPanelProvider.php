@@ -58,7 +58,7 @@ class AdminPanelProvider extends PanelProvider
             ->sidebarCollapsibleOnDesktop()
 
             // 🎨 COLOR PALETTE — Refined tones
-            ->font('Inter')
+            ->font('Plus Jakarta Sans')
             ->colors([
                 'primary' => Color::Amber,
                 'success' => Color::Emerald,
