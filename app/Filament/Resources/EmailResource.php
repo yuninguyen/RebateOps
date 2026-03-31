@@ -28,6 +28,7 @@ class EmailResource extends Resource
     // 🟢 DRY: Status labels dùng chung cho toàn bộ Resource
     public const STATUS_LABELS = [
         'active' => 'Live',
+        'live' => 'Live',
         'disabled' => 'Disabled',
         'locked' => 'Locked',
     ];
@@ -155,8 +156,8 @@ class EmailResource extends Resource
                     ->searchable()
                     ->toggleable() // Cho phép ẩn/hiện cột này
                     ->formatStateUsing(fn(string $state): string => static::STATUS_LABELS[$state] ?? static::STATUS_LABELS[strtolower($state)] ?? 'N/A')
-                    ->color(fn(string $state): string => match ($state) {
-                        'active' => 'success',
+                    ->color(fn(string $state): string => match (strtolower($state)) {
+                        'active', 'live' => 'success',
                         'disabled' => 'warning',
                         'locked' => 'danger',
                         default => 'gray',
@@ -207,7 +208,7 @@ class EmailResource extends Resource
                     }),
 
                 Tables\Columns\TextColumn::make('email_password')
-                    ->label('Email Password')
+                    ->label('Password')
                     ->alignment(Alignment::Center)
                     ->copyable()
                     ->searchable(),
@@ -222,7 +223,6 @@ class EmailResource extends Resource
                 Tables\Columns\TextColumn::make('provider')
                     ->label('Provider')
                     ->alignment(Alignment::Center)
-                    ->searchable()
                     ->toggleable()
                     // Tự động viết hoa chữ cái đầu (outlook -> Outlook)
                     ->formatStateUsing(fn(string $state): string => ucfirst($state)),
@@ -233,10 +233,9 @@ class EmailResource extends Resource
                     ->label('Usage')
                     ->counts('accounts')
                     ->alignment(Alignment::Center)
-                    ->formatStateUsing(fn($state) => $state > 0 ? "{$state} Account(s)" : 'N/A')
+                    ->formatStateUsing(fn($state) => $state > 0 ? "{$state}" : 'N/A')
                     ->color(fn($state) => $state > 0 ? 'success' : 'secondary')
                     ->wrap()
-                    ->searchable()
                     ->toggleable(), // Cho phép ẩn/hiện cột này
 
                 // Hiển thị các tài khoản đang dùng email này, nếu có
@@ -245,7 +244,6 @@ class EmailResource extends Resource
                     ->placeholder('N/A') // Nếu không có tài khoản nào đang dùng email này
                     ->alignment(Alignment::Center)
                     ->formatStateUsing(fn($state) => is_array($state) ? implode(', ', $state) : $state) // Nếu có nhiều platform sẽ nối bằng dấu phẩy
-                    ->searchable()
                     ->toggleable(), // Cho phép ẩn/hiện cột này 
             ])
 
@@ -327,7 +325,7 @@ class EmailResource extends Resource
                             $twoFA = $record->two_factor_code ?? 'N/A';
                             $emailNote = $record->note ?? 'N/A'; // Khớp với trường 'note' trong DB
                             $provider = $record->provider ? ucfirst($record->provider) : 'Other'; // Hiển thị nhà cung cấp email nếu có, nếu không thì là 'Other'
-                            $usage = $record->accounts_count > 0 ? "{$record->accounts_count} Account(s)" : 'N/A';
+                            $usage = $record->accounts_count > 0 ? "{$record->accounts_count}" : 'N/A';
                             $platforms = $record->accounts->pluck('platform')->implode(', ') ?: 'N/A';
 
                             $singleLine = " | {$id} | {$emailStatus} | {$yearCreated} | {$email} | {$emailPass} | {$recovery} | {$twoFA} | {$emailNote} | {$provider} | {$usage} | {$platforms} | ";
@@ -441,7 +439,7 @@ class EmailResource extends Resource
                                 $twoFA = e($record->two_factor_code ?? 'N/A'); // Escape 2FA code để tránh lỗi nếu có ký tự đặc biệt
                                 $note = e($record->note ?? 'N/A'); // Đồng bộ đúng trường 'note'
                                 $provider = $record->provider ? ucfirst($record->provider) : 'Other';
-                                $usage = $record->accounts_count > 0 ? "{$record->accounts_count} Account(s)" : 'N/A';
+                                $usage = $record->accounts_count > 0 ? "{$record->accounts_count}" : 'N/A';
                                 $platforms = $record->accounts->pluck('platform')->implode(', ') ?: 'N/A'; // Lấy danh sách platform đang dùng email này
 
                                 // Định dạng thông tin cho từng email

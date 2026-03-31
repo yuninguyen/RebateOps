@@ -347,8 +347,8 @@ trait HasAccountSchema
                         $emailNote = $record->email?->note ?? 'N/A'; // Lấy Note từ bảng Email
                         $emailStatus = $record->email?->status ?? 'N/A'; // Lấy Status từ bảng Email
                         // Lấy label status chuẩn
-                        [$emailstatusLabels, $emailstatusLabelsColor] = match ($emailStatus) {
-                            'active' => ['Live', '#22c55e'],
+                        [$emailstatusLabels, $emailstatusLabelsColor] = match (strtolower($emailStatus)) {
+                            'active', 'live' => ['Live', '#22c55e'],
                             'disabled' => ['Disabled', '#f59e0b'],
                             'locked' => ['Locked', '#ef4444'],
                             default   => [ucfirst($emailStatus), '#6b7280'],
@@ -392,7 +392,7 @@ trait HasAccountSchema
 
                 // Hiển thị Password và cho phép Click để Copy
                 TextColumn::make('password')
-                    ->label('Platform Password')
+                    ->label('Password')
                     ->alignment(Alignment::Center)
                     ->copyable()
                     ->copyMessage('Copied password to clipboard!')
