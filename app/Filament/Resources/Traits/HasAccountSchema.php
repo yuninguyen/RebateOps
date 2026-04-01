@@ -345,13 +345,16 @@ trait HasAccountSchema
                         $rec = $record->email?->recovery_email ?? 'N/A';
                         $twoFA = $record->email?->two_factor_code ?? 'N/A';
                         $emailNote = $record->email?->note ?? 'N/A'; // Lấy Note từ bảng Email
-                        $emailStatus = $record->email?->status ?? 'N/A'; // Lấy Status từ bảng Email
+                        $emailStatus = $record->email?->status ?? '';
                         // Lấy label status chuẩn
                         [$emailstatusLabels, $emailstatusLabelsColor] = match (strtolower($emailStatus)) {
                             'active', 'live' => ['Live', '#22c55e'],
                             'disabled' => ['Disabled', '#f59e0b'],
                             'locked' => ['Locked', '#ef4444'],
-                            default   => [ucfirst($emailStatus), '#6b7280'],
+                            default   => [
+                                (blank($emailStatus) || strtolower($emailStatus) === 'n/a') ? 'N/A' : ucfirst($emailStatus), 
+                                '#6b7280'
+                            ],
                         };
 
                         return "

@@ -310,15 +310,51 @@ span.fi-ta-text-item-label {
     text-align: left !important;
 }
 
-/* Summary row — amber gradient accent */
-.fi-ta-summary-row {
+/* 1. Base Summary rows (Group Totals) — Amber/Yellow */
+.fi-ta-summary-row,
+.fi-ta-summary-tr {
     background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%) !important;
-    border-top: 2px solid #FDE68A !important;
+    border-top: 1px solid #FDE68A !important;
 }
 
-.fi-ta-summary-row td {
+/* 2. Global Table Summary (Absolute Bottom) — Synchronized with Sidebar */
+/* Targets the table-level summary specifically, excluding group-level totals */
+.fi-ta-summary-row.bg-gray-50,
+.fi-ta-summary-row.dark\:bg-white\/5 {
+    background: #1E293B !important; /* LIGHTER SIDEBAR TONE FOR PERFECT MATCH */
+    border-top: 2px solid #F59E0B !important; /* ACCENT FROM SIDEBAR */
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.15) !important;
+}
+
+/* 3. Global Summary Aggregate Values — High Contrast & Pro */
+.fi-ta-summary-row.bg-gray-50 td,
+.fi-ta-summary-row.bg-gray-50 span,
+.fi-ta-summary-row.dark\:bg-white\/5 td,
+.fi-ta-summary-row.dark\:bg-white\/5 span {
+    color: #FFFFFF !important;
+    font-weight: 850 !important;
+    font-size: 0.95rem !important;
+    letter-spacing: 0.02em !important;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.3) !important;
+}
+
+/* Ensure group total values stay readable in Amber theme */
+.fi-ta-summary-row:not(.bg-gray-50) td,
+.fi-ta-summary-row:not(.bg-gray-50) span {
+    color: #92400E !important; /* Amber-900 */
     font-weight: 700 !important;
-    color: var(--text-primary) !important;
+}
+
+/* 4. COMPACT SUMMARIES — Reduced Height for Cleaner Look */
+.fi-ta-summary-row td {
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+}
+
+.fi-ta-summary-row-heading {
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+    font-size: 14px !important;
 }
 
 /* Empty state */
