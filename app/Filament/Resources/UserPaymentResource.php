@@ -116,7 +116,7 @@ class UserPaymentResource extends Resource
 
                 Tables\Columns\TextColumn::make('transaction_type')
                     ->label('Transaction Type')
-                    ->description(fn($record) => 'Rate: ' . number_format($record->exchange_rate) . ' đ') // Hiện Rate nhỏ dưới dòng này
+                    ->description(fn($record) => 'Market Rate: ' . number_format($record->exchange_rate) . ' | Payout: ' . number_format($record->payout_rate)) // Hiện cả 2 Rate
                     ->searchable()
                     ->alignment(Alignment::Center),
 
@@ -131,6 +131,14 @@ class UserPaymentResource extends Resource
                     ->money('VND', locale: 'vi_VN') // Tự format 25.000.000 ₫
                     ->color('primary')
                     ->weight('bold')
+                    ->alignment(Alignment::Center),
+
+                // 🟢 THÊM CỘT LỢI NHUẬN (CHỈ ADMIN THẤY)
+                Tables\Columns\TextColumn::make('profit_vnd')
+                    ->label('Profit')
+                    ->money('VND', locale: 'vi_VN')
+                    ->color('success')
+                    ->visible(fn() => auth()->user()?->isAdmin())
                     ->alignment(Alignment::Center),
 
                 Tables\Columns\TextColumn::make('status')
@@ -153,6 +161,14 @@ class UserPaymentResource extends Resource
                     ->dateTime('d/m/Y H:i')
                     ->alignment(Alignment::Center),
             ])
+            ->groups([
+                Tables\Grouping\Group::make('transaction_type')
+                    ->label('Payment Type')
+                    ->getTitleFromRecordUsing(function ($record) {
+                        return str_contains($record->transaction_type, 'Gift Card') ? '🎁 Gift Card' : '💰 PayPal';
+                    })
+            ])
+            ->defaultGroup('transaction_type')
             ->filters([
                 // Bộ lọc trạng thái
                 Tables\Filters\SelectFilter::make('status')

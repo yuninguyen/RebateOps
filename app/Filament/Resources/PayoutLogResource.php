@@ -1276,7 +1276,14 @@ class PayoutLogResource extends Resource
                         ->color('warning')
                         ->visible(fn() => auth()->user()?->isAdmin()) // Chỉ Admin
                         ->requiresConfirmation()
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        ->form([
+                            Forms\Components\TextInput::make('manual_payout_rate')
+                                ->label('Payout Exchange Rate')
+                                ->placeholder('Eg: 20000')
+                                ->numeric()
+                                ->helperText('💡 Enter the rate YOU WANT TO PAY the user. If left blank, it will default to the Market Rate (0 profit).'),
+                        ])
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data) {
 
                             // 1. Chỉ lọc đơn hợp lệ: Đã Completed và Chưa bị chốt sổ
                             $validSelected = $records->where('status', 'completed')->whereNull('user_payment_id');
@@ -1291,8 +1298,6 @@ class PayoutLogResource extends Resource
                             }
 
                             // 🟢 FIX LỖI NHÂN ĐÔI (DOUBLE COUNTING)
-                            // Gom tất cả ID lại: Nếu là đơn con thì lấy ID của cha, nếu là cha thì lấy ID của chính nó.
-                            // Sau đó dùng unique() để loại bỏ các ID trùng nhau.
                             $parentIds = $validSelected->map(fn($log) => $log->parent_id ?? $log->id)->unique();
 
                             // Lấy lại danh sách các đơn Gốc (Parent) sạch sẽ từ Database
@@ -1314,15 +1319,10 @@ class PayoutLogResource extends Resource
                             foreach ($groupedLogs as $groupKey => $logs) {
                                 $firstLog = $logs->first();
                                 $sourceName = '';
-                                // 🟢 1. GỌI PLATFORM TỪ TRAIT HASPLATFORM CỦA SẾP
                                 $platformRaw = $firstLog->account?->platform ?? 'unknown';
-
-                                // Gọi thẳng mảng $platform từ Trait mà không cần khởi tạo
                                 $platformName = \App\Filament\Resources\Traits\HasPlatform::$platform[$platformRaw] ?? strtoupper($platformRaw);
 
-                                // 🟢 2. GỌI BRAND TỪ DATABASE (CHUẨN NHẤT)
                                 if ($firstLog->asset_type === 'gift_card') {
-                                    // Tìm Brand trong DB để lấy cái 'name' hiển thị đẹp nhất
                                     $brandRecord = \App\Models\Brand::where('slug', $firstLog->gc_brand)->first();
                                     $sourceName = $brandRecord ? $brandRecord->name : ucwords(str_replace(['_', '-'], ' ', $firstLog->gc_brand));
                                 } else {
@@ -1330,14 +1330,13 @@ class PayoutLogResource extends Resource
                                 }
 
                                 $totalUsd = 0;
-                                $totalVnd = 0;
+                                $totalVndMarket = 0;
 
                                 $parentIdsToUpdate = [];
                                 $childIdsToUpdate = [];
 
                                 // 🟢 QUÉT TỪNG ĐƠN GỐC ĐỂ TÍNH TIỀN
                                 foreach ($logs as $log) {
-                                    // Tìm đơn con đã Exchange của chính đơn gốc này
                                     $exchangedChild = $log->children()
                                         ->whereNotNull('exchange_rate')
                                         ->where('exchange_rate', '>', 0)
@@ -1347,21 +1346,27 @@ class PayoutLogResource extends Resource
                                     $targetRecord = $exchangedChild ? $exchangedChild : $log;
 
                                     $usd = $targetRecord->net_amount_usd > 0 ? $targetRecord->net_amount_usd : $log->net_amount_usd;
-                                    $rate = $targetRecord->exchange_rate ?? 0;
-                                    $vnd = $targetRecord->total_vnd > 0 ? $targetRecord->total_vnd : ($usd * $rate);
+                                    $marketRate = $targetRecord->exchange_rate ?? 0;
+                                    $vndMarket = $targetRecord->total_vnd > 0 ? $targetRecord->total_vnd : ($usd * $marketRate);
 
                                     $totalUsd += $usd;
-                                    $totalVnd += $vnd;
+                                    $totalVndMarket += $vndMarket;
 
-                                    // Ghi nhớ ID để khóa
                                     $parentIdsToUpdate[] = $log->id;
                                     if ($exchangedChild) {
                                         $childIdsToUpdate[] = $exchangedChild->id;
                                     }
                                 }
 
-                                // Tính tỷ giá trung bình
-                                $averageRate = $totalUsd > 0 ? round($totalVnd / $totalUsd, 2) : 0;
+                                // Tính tỷ giá thị trường trung bình
+                                $averageMarketRate = $totalUsd > 0 ? round($totalVndMarket / $totalUsd, 2) : 0;
+                                
+                                // Lấy tỷ giá trả user từ form (nếu không nhập thì lấy bằng tỷ giá thị trường)
+                                $payoutRate = (float) ($data['manual_payout_rate'] ?? $averageMarketRate);
+                                $totalVndPayout = floor($totalUsd * $payoutRate);
+                                
+                                // Lợi nhuận = Tiền thực nhận về - Tiền trả User
+                                $profitVnd = $totalVndMarket - $totalVndPayout;
 
                                 // 4. TẠO PHIẾU LƯƠNG
                                 $payment = \App\Models\UserPayment::create([
@@ -1369,8 +1374,10 @@ class PayoutLogResource extends Resource
                                     'platform' => $platformName,
                                     'transaction_type' => ($firstLog->asset_type === 'gift_card' ? 'Gift Card' : 'PayPal') . " ({$sourceName})",
                                     'total_usd' => $totalUsd,
-                                    'exchange_rate' => $averageRate,
-                                    'total_vnd' => $totalVnd,
+                                    'exchange_rate' => $averageMarketRate, // Lưu Market Rate để đối soát
+                                    'payout_rate' => $payoutRate,        // Lưu Payout Rate
+                                    'total_vnd' => $totalVndPayout,      // Số tiền thực trả User
+                                    'profit_vnd' => $profitVnd,          // Số tiền lãi
                                     'status' => 'pending',
                                 ]);
 
@@ -1384,7 +1391,7 @@ class PayoutLogResource extends Resource
 
                             \Filament\Notifications\Notification::make()
                                 ->title('Settlement Successful!')
-                                ->body('Exact exchange rates have been applied from Exchanged records.')
+                                ->body('Payout rates and profits have been calculated correctly.')
                                 ->success()
                                 ->send();
                         })

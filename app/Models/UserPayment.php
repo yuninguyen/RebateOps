@@ -21,7 +21,9 @@ class UserPayment extends Model
         'transaction_type',
         'total_usd',
         'exchange_rate',
+        'payout_rate',
         'total_vnd',
+        'profit_vnd',
         'status', // pending, paid
         'payment_proof',
         'note',

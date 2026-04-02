@@ -29,45 +29,55 @@ class PayoutStats extends BaseWidget
 
     protected function getStats(): array
     {
-        // Khởi tạo Query cơ bản
-        $query = PayoutLog::query();
+        // 1. Khởi tạo Query cho RebateTracker (Dành cho Card 1 - Confirmed)
+        // Đây là nguồn dữ liệu chính xác nhất cho doanh thu đã xác nhận từ platform
+        $rebateQuery = \App\Models\RebateTracker::query();
+        
+        // 2. Khởi tạo Query cho UserPayment (Dành cho Card 2 & 3 - Paid/Exchanged)
+        // Đây là nguồn dữ liệu cho các khoản đã thực sự chi trả cho User
+        $disbursementQuery = \App\Models\UserPayment::query();
 
-        // 3. QUAN TRỌNG: Nếu có User được chọn, hãy lọc dữ liệu của User đó
+        // 3. Áp dụng logic lọc theo User cho cả hai Query
         if (!auth()->user()?->isAdmin()) {
-            $query->whereHas('account', function ($q) {
-                $q->where('user_id', auth()->id());
-            });
+            // Nếu là Staff, chỉ xem của chính mình
+            $rebateQuery->where('user_id', auth()->id());
+            $disbursementQuery->where('user_id', auth()->id());
         } elseif ($this->selectedUserId) {
-            $query->whereHas('account', function ($q) {
-                $q->where('user_id', $this->selectedUserId);
-            });
+            // Nếu là Admin và đang chọn 1 User cụ thể
+            $rebateQuery->where('user_id', $this->selectedUserId);
+            $disbursementQuery->where('user_id', $this->selectedUserId);
         }
 
-        // Tính toán dựa trên Query đã được lọc (hoặc chưa lọc nếu selectedUserId là null)
-        $totalCompletedUsd = (clone $query)->where('status', 'completed')->sum('net_amount_usd');
-        $pendingCount = (clone $query)->where('status', 'pending')->count();
-        $totalVnd = (clone $query)->where('status', 'completed')
-            ->where('transaction_type', 'liquidation')
+        // --- TÍNH TOÁN CARD 1: CONFIRMED (Từ RebateTracker) ---
+        // Đồng bộ 100% với bảng Revenue Report bên dưới
+        $totalConfirmedUsd = (clone $rebateQuery)->where('status', 'Confirmed')
+            ->sum('rebate_amount');
+            
+        // --- TÍNH TOÁN CARD 2 & 3: PAID / EXCHANGED (Từ UserPayment/Disbursement) ---
+        $totalPaidUsd = (clone $disbursementQuery)->where('status', 'paid')
+            ->sum('total_usd');
+
+        $totalVnd = (clone $disbursementQuery)->where('status', 'paid')
             ->sum('total_vnd');
 
         // Hiển thị nhãn để biết đang lọc hay xem tổng
         $labelSuffix = $this->selectedUserId ? ' (Filtered)' : ' (Global)';
 
         return [
-            Stat::make('Total Paid (USD)' . $labelSuffix, '$' . number_format($totalCompletedUsd, 2))
-                ->description('Completed payouts')
-                ->descriptionIcon('heroicon-m-arrow-trending-up')
+            Stat::make('Total CONFIRMED' . $labelSuffix, '$' . number_format($totalConfirmedUsd, 2))
+                ->description('Cashback confirmed')
+                ->descriptionIcon('heroicon-m-check-circle')
                 ->color('success')
                 ->chart([7, 2, 10, 3, 15, 4, 17]),
 
-            Stat::make('Pending Requests' . $labelSuffix, $pendingCount)
-                ->description('Awaiting processing')
-                ->descriptionIcon('heroicon-m-clock')
+            Stat::make('Total Paid (USD)' . $labelSuffix, '$' . number_format($totalPaidUsd, 2))
+                ->description('Completed payments')
+                ->descriptionIcon('heroicon-m-banknotes')
                 ->color('warning'),
 
             Stat::make('Total Exchanged (VND)' . $labelSuffix, number_format($totalVnd, 0, ',', '.') . ' ₫')
                 ->description('Converted to VND')
-                ->descriptionIcon('heroicon-m-banknotes')
+                ->descriptionIcon('heroicon-m-arrows-right-left')
                 ->color('info'),
         ];
     }

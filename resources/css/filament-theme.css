@@ -210,11 +210,10 @@
     box-sizing: border-box !important;
 }
 
-/* Override Tailwind max-w-7xl that causes overflow */
-.fi-page .max-w-7xl,
-.fi-main .max-w-7xl,
+/* Override Filament default max-width for main content area to allow full width usage */
 .fi-main-ctn .max-w-7xl,
-[class*="max-w-"] {
+.fi-main .max-w-7xl,
+.fi-page .max-w-7xl {
     max-width: 100% !important;
     box-sizing: border-box !important;
 }
@@ -406,6 +405,15 @@ textarea.fi-input {
     font-size: 13px !important;
     font-weight: 500 !important;
     color: var(--text-secondary) !important;
+    margin-bottom: 0.5rem !important;
+    display: inline-block !important;
+}
+
+.fi-fo-field-wrp-helper-text {
+    margin-top: 0.75rem !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+    color: var(--text-muted) !important;
 }
 
 /* ============================================
@@ -427,6 +435,12 @@ textarea.fi-input {
 .fi-btn:active {
     transform: translateY(0) scale(0.98) !important;
     box-shadow: none !important;
+}
+
+/* Modal Footer Spacing */
+.fi-modal-footer {
+    padding: 1.25rem 1.5rem !important;
+    margin-top: 0.5rem !important;
 }
 
 /* Primary button — slightly bolder */
@@ -468,7 +482,17 @@ textarea.fi-input {
 }
 
 .fi-modal-header {
-    border-bottom: 1px solid var(--border-color) !important;
+    border-bottom: none !important;
+    padding: 1.5rem 1.5rem 0.5rem !important;
+}
+
+.fi-modal-description {
+    margin-bottom: 1rem !important;
+    color: var(--text-muted) !important;
+}
+
+.fi-modal-content {
+    padding: 1rem 1.5rem 1.5rem !important;
 }
 
 /* ============================================
