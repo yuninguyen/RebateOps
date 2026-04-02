@@ -614,3 +614,110 @@ textarea.fi-input {
     font-size: 14px !important;
     color: var(--text-secondary) !important;
 }
+
+/* ============================================
+   23. STICKY TABLE ENHANCEMENTS
+   ============================================ */
+/* Limits the height of long tables to ensure horizontal scroll is always visible */
+.fi-ta-content {
+    max-height: calc(100vh - 220px) !important;
+    overflow: auto !important;
+}
+
+/* Make headers stick to top */
+.fi-ta-table th {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 20 !important;
+    background: #F8FAFC !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+}
+
+.dark .fi-ta-table th {
+    background: #0F172A !important;
+}
+
+/* Force cell data to the left while keeping the column header centered */
+.force-left-data .fi-ta-text {
+    justify-content: flex-start !important;
+    text-align: left !important;
+}
+
+/* Fix z-index issue: Ensure dropdowns (Toggle columns, Filters) always appear ABOVE table headers */
+.fi-ta-header-cell {
+    z-index: 10 !important;
+}
+
+.fi-dropdown {
+    z-index: 100 !important;
+}
+
+/* 24. ULTRA COMPACT ROWS */
+.fi-ta-text {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* Premium Dashboard Font size (13px) for data density */
+.fi-ta-content .fi-ta-text, 
+.fi-ta-content .fi-ta-cell {
+    font-size: 0.8125rem !important; /* ~13px */
+}
+
+/* Global Header Font Size (13px) */
+.fi-ta-header-cell-label,
+.fi-ta-header-cell-content button span {
+    font-size: 0.8125rem !important; /* ~13px */
+}
+
+/* Specific Header Padding (0.8rem) ONLY for Dashboard and Activity Log */
+:is(.fi-dashboard-page, .fi-resource-activity-logs) .fi-ta-header-cell,
+:is(.fi-dashboard-page, .fi-resource-activity-logs) .fi-ta-header-cell-content,
+:is(.fi-dashboard-page, .fi-resource-activity-logs) .fi-ta-header-cell-content button {
+    padding-top: 0.8rem !important;
+    padding-bottom: 0.8rem !important;
+    min-height: 0 !important;
+}
+
+/* Reset line-height for all headers */
+.fi-ta-header-cell-label,
+.fi-ta-header-cell-content button span {
+    line-height: normal !important;
+}
+
+/* Center specific table headers while keeping column data aligned to the start */
+.centered-header .fi-ta-header-cell-content {
+    justify-content: center !important;
+}
+
+/* ============================================
+   DASHBOARD: Equal-height Chart Widgets & Cards
+   ============================================ */
+/* Force all widget rows to stretch children equally */
+.fi-page-dashboard .fi-widgets > .grid {
+    align-items: stretch !important;
+}
+
+/* Chart widgets fill their grid cell fully */
+.fi-wi-chart {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+.fi-wi-chart > div,
+.fi-wi-chart > div > div {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Stats Overview: cards stretch evenly, no right-side gap */
+.fi-wi-stats-overview {
+    width: 100%;
+}
+.fi-wi-stats-overview .fi-wi-stats-overview-stat {
+    min-width: 0;
+}
+.fi-wi-stats-overview .fi-wi-stats-overview-stat-content {
+    width: 100%;
+}

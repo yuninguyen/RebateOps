@@ -332,10 +332,11 @@ trait HasAccountSchema
                 // Lấy từ quan hệ email() trong Model Account
                 TextColumn::make('email.email')
                     ->label('Email Address')
-                    ->alignment(Alignment::Center)
+                    ->alignment(Alignment::Start)
+                    ->extraHeaderAttributes(['class' => 'centered-header'])
                     ->searchable()
                     ->wrap()
-                    ->width('25%')
+                    ->grow()
                     ->copyable()
                     ->copyMessage('Copied email to clipboard!')
                     ->html()
@@ -358,7 +359,7 @@ trait HasAccountSchema
                         };
 
                         return "
-                            <div style='text-align: left; font-size: 13px; line-height: 1.6; padding-left: 5px;'>
+                            <div style='text-align: left; line-height: 1.6; padding-left: 0;'>
                                 <div style='margin-bottom: 2px; font-size: 14px;'>
                                     <span style='color: #1e293b; font-weight: 700;'>{$email}</span>
                                 </div>
@@ -397,6 +398,7 @@ trait HasAccountSchema
                 TextColumn::make('password')
                     ->label('Password')
                     ->alignment(Alignment::Center)
+                    ->width('120px')
                     ->copyable()
                     ->copyMessage('Copied password to clipboard!')
                     ->copyMessageDuration(1500),
@@ -405,7 +407,8 @@ trait HasAccountSchema
                 TextColumn::make('state')
                     ->label('Source Information')
                     ->width('250px')
-                    ->alignment(Alignment::Center)
+                    ->alignment(Alignment::Start)
+                    ->extraHeaderAttributes(['class' => 'centered-header'])
                     ->toggleable()
                     ->copyable()
                     ->wrap()
@@ -423,7 +426,7 @@ trait HasAccountSchema
                         $linked = $record->paypal_linked_at ? $record->paypal_linked_at->format('d/m/Y') : 'N/A';
 
                         return "
-                            <div style='justity-content: flex-start !important; text-align: left; font-size: 13px; line-height: 1.6; max-width: 250px; padding-left: 5px;'>
+                            <div style='justify-content: flex-start !important; text-align: left; line-height: 1.6; max-width: 250px; padding-left: 0;'>
                                 <div style='margin-bottom: 2px;'>
                                     <span style='color: #64748b;'>State:</span> 
                                     <span style='color: #1e293b; font-weight: 500;'>{$stateDisplay}</span>
@@ -533,7 +536,7 @@ trait HasAccountSchema
                     })
 
                     ->extraAttributes(function (Account $record) {
-                        $styles = 'font-size: 13px !important; font-weight: 400 !important; line-height: 1.2;';
+                        $styles = 'font-weight: 400 !important; line-height: 1.2;';
 
                         if ($record->user_id === null) {
                             return [

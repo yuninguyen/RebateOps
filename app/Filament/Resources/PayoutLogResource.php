@@ -769,10 +769,11 @@ class PayoutLogResource extends Resource
                 // Account Email - Platform
                 Tables\Columns\TextColumn::make('account_id')
                     ->label('Account Email')
-                    ->alignment(Alignment::Center)
+                    ->alignment(Alignment::Start)
+                    ->extraHeaderAttributes(['class' => 'centered-header'])
                     ->copyable()
                     ->copyMessage('Copied to clipboard!')
-                    ->wrap()
+                     ->wrap()
                     ->width('200px')
                     ->html() // Cho phép xuống dòng bằng thẻ <br>
                     ->formatStateUsing(function ($record) {
@@ -786,7 +787,7 @@ class PayoutLogResource extends Resource
                         $platform = ucwords(str_replace(['_', '-'], ' ', $account->platform ?? 'N/A'));
 
                         return "
-                                <div style='display: inline-block; text-align: left; line-height: 1.7;'>
+                                <div style='line-height: 1.7;'>
                                     <div style='margin-bottom: 4px;'>
                                         <span style='color: #111827;'>$email</span>
                                         <span style='color: #6b7280; display: inline-block;'>Platform:</span> 
@@ -809,6 +810,7 @@ class PayoutLogResource extends Resource
                 Tables\Columns\TextColumn::make('asset_info')
                     ->label('Asset Details')
                     ->alignment(Alignment::Start)
+                    ->extraHeaderAttributes(['class' => 'centered-header'])
                     ->copyable()
                     ->copyMessage('Copied to clipboard!')
                     ->wrap()
@@ -833,7 +835,7 @@ class PayoutLogResource extends Resource
                         if ($record->asset_type === 'paypal') {
                             $walletName = $record->payoutMethod?->name ?? 'N/A';
 
-                            return "<div style='display: inline-block; text-align: left; line-height: 1.7;'>
+                            return "<div style='line-height: 1.7;'>
                                         <div style='margin-bottom: 4px;'>
                                             <span style='color: #6b7280; display: inline-block;'>PayPal Withdrawal:</span> 
                                             <strong style='color: #111827;'>$walletName</strong>
@@ -847,7 +849,7 @@ class PayoutLogResource extends Resource
                         $code = $record->gc_code ?? '---';
                         $pin = $record->gc_pin ?? '---';
                         return "
-                                <div style='display: inline-block; text-align: left; line-height: 1.7;'>
+                                <div style='line-height: 1.7;'>
                                 <div style='margin-bottom: 4px;'>
                                         <span style='color: #6b7280; display: inline-block;'>Asset Type:</span> 
                                         <strong style='color: #111827;'>{$assetType}</strong>
@@ -929,7 +931,7 @@ class PayoutLogResource extends Resource
                     ->prefix('$')
                     ->color('warning')
                     ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                    ->alignment(Alignment::Right)
+                    ->alignment(Alignment::Center)
                     ->summarize(
                         Tables\Columns\Summarizers\Sum::make()
                             ->label('')
@@ -944,7 +946,7 @@ class PayoutLogResource extends Resource
                     ->visible(fn() => auth()->user()?->isAdmin()) // 🟢 ẨN KHỎI NHÂN VIÊN
                     ->numeric(0, ',', '.')
                     ->prefix('₫')
-                    ->alignment(Alignment::Right)
+                    ->alignment(Alignment::Center)
                     // 🟢 TỔNG KẾT VND
                     ->summarize(
                         Tables\Columns\Summarizers\Sum::make()
