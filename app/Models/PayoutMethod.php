@@ -5,14 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Spatie\Activitylog\Traits\LogsActivity; // Bật tính năng Log
-use Spatie\Activitylog\LogOptions;          // Tùy chọn Log
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class PayoutMethod extends Model
 {
-    use LogsActivity; // Kích hoạt "máy quay" cho PayoutMethod
-
-    use HasFactory;
+    use LogsActivity, HasFactory, SoftDeletes;
 
     // Tên bảng trong Database (để chắc chắn không lệch)
     protected $table = 'payout_methods';

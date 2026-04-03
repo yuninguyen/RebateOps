@@ -3,36 +3,31 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
 
-class Brand extends Model
+class Platform extends Model
 {
     use LogsActivity, SoftDeletes;
 
-    // Cho phép lưu các cột này
     protected $fillable = [
         'name',
-        'platform',
         'slug',
-        'boost_percentage',
-        'maximum_limit',
-        'gc_rate',
+        'is_active',
+        'sort_order',
     ];
 
-    // Cấu hình theo dõi toàn bộ các cột được phép điền
+    protected $casts = [
+        'is_active' => 'boolean',
+        'sort_order' => 'integer',
+    ];
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
             ->logFillable()
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
-    }
-
-    public function payoutLogs(): HasMany
-    {
-        return $this->hasMany(PayoutLog::class, 'gc_brand', 'name');
     }
 }

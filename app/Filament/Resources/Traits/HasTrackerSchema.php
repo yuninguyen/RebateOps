@@ -61,11 +61,12 @@ trait HasTrackerSchema
                                 // 2. SELECT PLATFORM (Làm nhỏ lại cho Staff)
                                 Forms\Components\Select::make('platform')
                                     ->label('Platform')
-                                    ->options(self::$platform)
+                                    ->options(self::getPlatforms())
                                     ->options(function (Forms\Get $get, $record) {
                                         $userId = $get('user_id') ?? $record?->user_id;
-                                        $allPlatforms = self::$platform;
-                                        if (!$userId) return $allPlatforms;
+                                        $allPlatforms = self::getPlatforms();
+                                        if (!$userId)
+                                            return $allPlatforms;
 
                                         $activePlatformKeys = \App\Models\Account::where('user_id', $userId)
                                             ->whereNotNull('platform')
@@ -75,7 +76,7 @@ trait HasTrackerSchema
 
                                         $filteredPlatforms = [];
                                         foreach ($activePlatformKeys as $key) {
-                                            $filteredPlatforms[$key] = $allPlatforms[$key] ?? ucfirst((string)$key);
+                                            $filteredPlatforms[$key] = $allPlatforms[$key] ?? ucfirst((string) $key);
                                         }
                                         return $filteredPlatforms;
                                     })
@@ -94,7 +95,8 @@ trait HasTrackerSchema
                                     ->options(function ($get, $record) {
                                         $userId = $get('user_id') ?? $record?->user_id;
                                         $platform = $get('platform') ?? $record?->account?->platform;
-                                        if (!$userId || !$platform) return [];
+                                        if (!$userId || !$platform)
+                                            return [];
 
                                         return \App\Models\Account::where('user_id', $userId)
                                             ->where('platform', $platform)
@@ -116,7 +118,7 @@ trait HasTrackerSchema
                                     ->suffixAction(
                                         Forms\Components\Actions\Action::make('copyEmail')
                                             ->icon('heroicon-m-clipboard-document')
-                                            ->color('warning') 
+                                            ->color('warning')
                                             ->tooltip('Copy Email')
                                             ->action(function (Forms\Get $get, $livewire) {
                                                 $email = $get('account_email');
@@ -188,9 +190,11 @@ trait HasTrackerSchema
                                 // ... (Giữ nguyên toàn bộ nội dung HtmlString bên trong của Sếp)
                                 $emailState = $get('account_email');
                                 $account = \App\Models\Account::whereHas('email', fn($q) => $q->where('email', $emailState))->first();
-                                if (!$account) return new \Illuminate\Support\HtmlString("<div class='text-danger'>⚠️ No account found</div>");
+                                if (!$account)
+                                    return new \Illuminate\Support\HtmlString("<div class='text-danger'>⚠️ No account found</div>");
                                 $statuses = (array) $account->status;
-                                if (empty($statuses)) return "No status available.";
+                                if (empty($statuses))
+                                    return "No status available.";
                                 $htmlResult = collect($statuses)->map(function ($status, $index) use ($statuses) {
                                     $color = match ($status) {
                                         'active' => '#6b7280',
@@ -208,7 +212,7 @@ trait HasTrackerSchema
                                         'unlinked' => 'Unlinked PayPal',
                                         'not_linked' => 'Not Linked to PayPal',
                                         'no_paypal_needed' => 'No PayPal Required',
-                                        default => ucfirst(str_replace('_', ' ', (string)$status))
+                                        default => ucfirst(str_replace('_', ' ', (string) $status))
                                     };
                                     $arrow = ($index < count($statuses) - 1) ? " <span style='color: #d1d5db; margin: 0 4px;'>→</span> " : "";
                                     return "<span style='color: {$color}; font-weight: 800; font-size: 0.85rem;'>{$label}</span>{$arrow}";
@@ -293,7 +297,7 @@ trait HasTrackerSchema
                                 Forms\Components\Placeholder::make('rebate_amount_display')
                                     ->label('Rebate Amount ($)')
                                     ->content(function ($get) {
-                                        $total = (float)$get('order_value') * ((float)$get('cashback_percent') / 100);
+                                        $total = (float) $get('order_value') * ((float) $get('cashback_percent') / 100);
                                         return '$ ' . number_format($total, 2);
                                     })
                                     ->extraAttributes(['class' => 'text-success font-bold text-xl']),
@@ -344,7 +348,7 @@ trait HasTrackerSchema
                         \Filament\Infolists\Components\TextEntry::make('account.platform')
                             ->label('Platform')
                             ->placeholder('N/A')
-                            ->formatStateUsing(fn($state) => $state ? (self::$platform[$state] ?? '') : 'N/A'),
+                            ->formatStateUsing(fn($state) => $state ? (\App\Models\Platform::where('slug', $state)->value('name') ?? $state) : 'N/A'),
                         // User (Để hiện tên thay vì ID số 1)
                         \Filament\Infolists\Components\TextEntry::make('user.name')
                             ->label('User')
@@ -357,7 +361,8 @@ trait HasTrackerSchema
                             ->formatStateUsing(function ($state, $record) {
                                 // Lấy account từ record hiện tại của Infolist
                                 $account = $record->account;
-                                if (!$account || !$account->status) return null;
+                                if (!$account || !$account->status)
+                                    return null;
 
                                 // Đảm bảo dữ liệu là mảng để chạy vòng lặp map
                                 $statusHistory = is_array($account->status)
@@ -366,23 +371,23 @@ trait HasTrackerSchema
 
                                 $htmlResult = collect($statusHistory)->map(function ($status, $index) use ($statusHistory) {
                                     $color = match ($status) {
-                                        'active'           => '#6b7280',
-                                        'used'             => '#3b82f6',
+                                        'active' => '#6b7280',
+                                        'used' => '#3b82f6',
                                         'no_paypal_needed' => '#1e3a8a',
                                         'not_linked', 'unlinked' => '#f59e0b',
-                                        'linked'           => '#22c55e',
+                                        'linked' => '#22c55e',
                                         'limited', 'banned' => '#ef4444',
-                                        default            => '#6b7280'
+                                        default => '#6b7280'
                                     };
 
                                     $label = match ($status) {
-                                        'used'             => 'In Use',
-                                        'limited'          => 'PayPal Limited',
-                                        'linked'           => 'Linked PayPal',
-                                        'unlinked'         => 'Unlinked PayPal',
-                                        'not_linked'       => 'Not Linked to PayPal',
+                                        'used' => 'In Use',
+                                        'limited' => 'PayPal Limited',
+                                        'linked' => 'Linked PayPal',
+                                        'unlinked' => 'Unlinked PayPal',
+                                        'not_linked' => 'Not Linked to PayPal',
                                         'no_paypal_needed' => 'No PayPal Required',
-                                        default            => ucfirst(str_replace('_', ' ', (string)$status)),
+                                        default => ucfirst(str_replace('_', ' ', (string) $status)),
                                     };
 
                                     $isLast = $index === count($statusHistory) - 1;
@@ -416,28 +421,28 @@ trait HasTrackerSchema
                             ->placeholder('N/A')
                             ->badge()
                             ->icon(fn(string $state): string => match ($state) {
-                                'clicked'     => 'heroicon-m-cursor-arrow-rays',
-                                'pending'     => 'heroicon-m-clock',
-                                'confirmed'   => 'heroicon-m-check-badge',
-                                'missing'     => 'heroicon-m-magnifying-glass', // Hình kính lúp tìm kiếm
-                                'ineligible'  => 'heroicon-m-x-circle',        // Hình dấu X tròn
-                                default       => 'heroicon-m-question-mark-circle',
+                                'clicked' => 'heroicon-m-cursor-arrow-rays',
+                                'pending' => 'heroicon-m-clock',
+                                'confirmed' => 'heroicon-m-check-badge',
+                                'missing' => 'heroicon-m-magnifying-glass', // Hình kính lúp tìm kiếm
+                                'ineligible' => 'heroicon-m-x-circle',        // Hình dấu X tròn
+                                default => 'heroicon-m-question-mark-circle',
                             })
                             ->formatStateUsing(fn(string $state): string => match ($state) {
-                                'clicked'   => 'Clicked',
+                                'clicked' => 'Clicked',
                                 'pending' => 'Pending',
-                                'confirmed'  => 'Confirmed',
-                                'missing'  => 'Missing',
+                                'confirmed' => 'Confirmed',
+                                'missing' => 'Missing',
                                 'ineligible' => 'Ineligible',
-                                default   => ucfirst($state), // Các nhãn khác chỉ viết hoa chữ cái đầu
+                                default => ucfirst($state), // Các nhãn khác chỉ viết hoa chữ cái đầu
                             })
                             ->color(fn(string $state): string => match ($state) {
                                 'clicked' => 'gray',
-                                'pending'   => 'info',
+                                'pending' => 'info',
                                 'confirmed' => 'success',
                                 'missing' => 'warning',
                                 'ineligible' => 'danger',
-                                default  => 'gray',
+                                default => 'gray',
                             }),
                         \Filament\Infolists\Components\TextEntry::make('store_name')
                             ->label('Store name')
@@ -520,10 +525,12 @@ trait HasTrackerSchema
                 Tables\Columns\TextColumn::make('account.platform')
                     ->label('Platform')
                     ->alignment(Alignment::Center)
+                    ->extraHeaderAttributes(['style' => 'width: 90px; min-width: 90px'])
+                    ->extraAttributes(['style' => 'width: 90px; min-width: 90px'])
                     ->searchable(query: function ($query, $search) {
                         $query->whereHas('account', fn($q) => $q->where('platform', 'like', "%{$search}%"));
                     })
-                    ->formatStateUsing(fn($state) => $state ? (self::$platform[$state] ?? '') : 'N/A')
+                    ->formatStateUsing(fn($state) => $state ? (\App\Models\Platform::where('slug', $state)->value('name') ?? $state) : 'N/A')
                     ->visible(static::class === \App\Filament\Resources\RebateTrackerResource::class),
 
                 // 1. STORE (Đẩy lùi vào để phân cấp)
@@ -537,8 +544,6 @@ trait HasTrackerSchema
                     ->wrap()
                     ->width('20%')
                     ->searchable(),
-
-
 
                 // 2. ORDER VALUE
                 Tables\Columns\TextColumn::make('order_value')
@@ -576,12 +581,12 @@ trait HasTrackerSchema
                     ->badge()
                     // 1. Giữ nguyên Icon trạng thái ở phía trước (trái)
                     ->icon(fn(string $state): string => match ($state) {
-                        'clicked'     => 'heroicon-m-cursor-arrow-rays',
-                        'pending'     => 'heroicon-m-clock',
-                        'confirmed'   => 'heroicon-m-check-badge',
-                        'missing'     => 'heroicon-m-magnifying-glass',
-                        'ineligible'  => 'heroicon-m-x-circle',
-                        default       => 'heroicon-m-question-mark-circle',
+                        'clicked' => 'heroicon-m-cursor-arrow-rays',
+                        'pending' => 'heroicon-m-clock',
+                        'confirmed' => 'heroicon-m-check-badge',
+                        'missing' => 'heroicon-m-magnifying-glass',
+                        'ineligible' => 'heroicon-m-x-circle',
+                        default => 'heroicon-m-question-mark-circle',
                     })
                     // 2. Dùng formatStateUsing để "vẽ" thêm icon bút chì vào phía sau (phải)
                     ->formatStateUsing(fn(string $state) => new \Illuminate\Support\HtmlString('
@@ -591,21 +596,21 @@ trait HasTrackerSchema
                          </div>
                     '))
                     ->color(fn(string $state): string => match ($state) {
-                        'confirmed'  => 'success',
-                        'pending'    => 'info',
-                        'missing'    => 'warning',
+                        'confirmed' => 'success',
+                        'pending' => 'info',
+                        'missing' => 'warning',
                         'ineligible' => 'danger',
-                        default      => 'gray',
+                        default => 'gray',
                     })
                     ->action(
                         Tables\Actions\Action::make('quick_set_status')
                             ->form([
                                 Forms\Components\Select::make('status')
                                     ->options([
-                                        'clicked'    => 'Clicked',
-                                        'pending'    => 'Pending',
-                                        'confirmed'  => 'Confirmed',
-                                        'missing'    => 'Missing',
+                                        'clicked' => 'Clicked',
+                                        'pending' => 'Pending',
+                                        'confirmed' => 'Confirmed',
+                                        'missing' => 'Missing',
                                         'ineligible' => 'Ineligible',
                                     ])
                                     ->default(fn($record) => $record->status)
@@ -630,17 +635,16 @@ trait HasTrackerSchema
                     ->label('Transaction Date')
                     ->placeholder('N/A')
                     ->date('d/m/Y')
-                    ->alignment(Alignment::Center)
-                    ->sortable(),
+                    ->alignment(Alignment::Center),
                 Tables\Columns\TextColumn::make('payout_date')
                     ->label('Payout Date')
                     ->alignment(Alignment::Center)
-                    ->sortable()
                     // 1. Dùng state() để ép giá trị null thành chuỗi 'N/A' TRƯỚC khi render
                     ->state(fn($record) => $record->payout_date ? $record->payout_date : 'N/A')
                     // 2. Định dạng hiển thị: Nếu là 'N/A' thì giữ nguyên, nếu là ngày thì format
                     ->formatStateUsing(function ($state) {
-                        if ($state === 'N/A') return $state;
+                        if ($state === 'N/A')
+                            return $state;
                         try {
                             return \Carbon\Carbon::parse($state)->format('d/m/Y');
                         } catch (\Exception $e) {
@@ -710,11 +714,10 @@ trait HasTrackerSchema
                             ->toArray();
 
                         // 🟢 2. FORMAT LẠI NHÃN (LABEL) NGAY BÊN TRONG HÀM OPTIONS
+                        $platforms_map = \App\Models\Platform::pluck('name', 'slug')->toArray();
                         $formattedOptions = [];
                         foreach ($platforms as $p) {
-                            // Dùng mảng $platform từ Trait HasPlatform của bạn để map label, 
-                            // nếu không có thì giữ nguyên tên gốc
-                            $formattedOptions[$p] = self::$platform[$p] ?? $p;
+                            $formattedOptions[$p] = $platforms_map[$p] ?? $p;
                         }
 
                         return $formattedOptions;
@@ -739,18 +742,18 @@ trait HasTrackerSchema
 
                         // 2. Bộ từ điển dịch tên Status cho đẹp
                         $labels = [
-                            'pending'    => 'Pending',
-                            'confirmed'  => 'Confirmed',
+                            'pending' => 'Pending',
+                            'confirmed' => 'Confirmed',
                             'ineligible' => 'Ineligible',
-                            'missing'    => 'Missing',
-                            'clicked'    => 'Clicked / Ordered',
+                            'missing' => 'Missing',
+                            'clicked' => 'Clicked / Ordered',
                         ];
 
                         // 3. Ráp dữ liệu: Chỉ tạo Option cho những Status quét được ở Bước 1
                         $options = [];
                         foreach ($activeStatuses as $st) {
                             // Nếu có trong từ điển thì lấy từ điển, nếu status lạ thì tự viết hoa chữ cái đầu
-                            $options[$st] = $labels[$st] ?? ucfirst(trim((string)$st));
+                            $options[$st] = $labels[$st] ?? ucfirst(trim((string) $st));
                         }
 
                         return $options;
@@ -849,7 +852,7 @@ trait HasTrackerSchema
                             // Ghi đè dữ liệu mới vào bản sao
                             $replica->fill($data);
                             $replica->status = 'clicked'; // Reset trạng thái về mặc định
-                            $replica->rebate_amount = (float)$data['order_value'] * ($replica->cashback_percent / 100);
+                            $replica->rebate_amount = (float) $data['order_value'] * ($replica->cashback_percent / 100);
                         }),
                     Tables\Actions\RestoreAction::make(), // 🟢 Nút khôi phục dòng bị xóa
                     Tables\Actions\EditAction::make(),
@@ -981,13 +984,13 @@ trait HasTrackerSchema
         $filteredStatuses = array_filter($statusArray);
         $mappedStatuses = array_map(function ($status) {
             return match ($status) {
-                'used'             => 'In Use',
-                'limited'          => 'PayPal Limited',
-                'linked'           => 'Linked PayPal',
-                'unlinked'         => 'Unlinked PayPal',
-                'not_linked'       => 'Not Linked to PayPal',
+                'used' => 'In Use',
+                'limited' => 'PayPal Limited',
+                'linked' => 'Linked PayPal',
+                'unlinked' => 'Unlinked PayPal',
+                'not_linked' => 'Not Linked to PayPal',
                 'no_paypal_needed' => 'No PayPal Required',
-                default            => ucfirst(str_replace('_', ' ', (string)$status)),
+                default => ucfirst(str_replace('_', ' ', (string) $status)),
             };
         }, $filteredStatuses);
         $statusString = implode(' → ', $mappedStatuses);
@@ -999,12 +1002,12 @@ trait HasTrackerSchema
         $payoutDate = $record->payout_date ? \Carbon\Carbon::parse($record->payout_date)->format('Y-m-d') : 'N/A';
 
         $txStatus = match ($record->status) {
-            'pending'    => 'Pending',
-            'confirmed'  => 'Confirmed',
+            'pending' => 'Pending',
+            'confirmed' => 'Confirmed',
             'ineligible' => 'Ineligible',
-            'missing'    => 'Missing',
-            'clicked'    => 'Clicked / Ordered',
-            default      => ucfirst(trim((string)$record->status ?: 'N/A')),
+            'missing' => 'Missing',
+            'clicked' => 'Clicked / Ordered',
+            default => ucfirst(trim((string) $record->status ?: 'N/A')),
         };
 
         return [

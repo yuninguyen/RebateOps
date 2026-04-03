@@ -52,6 +52,7 @@
     background: var(--sidebar-bg) !important;
     border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
     width: var(--sidebar-width) !important;
+    zoom: 0.9 !important; /* Zoom out to 90% for a more compact menu */
 }
 
 /* Sidebar header/brand area */
@@ -94,9 +95,9 @@
     }
 }
 
-/* Brand name / logo */
+/* Brand name / logo — chỉ nhắm vào nội dung thương hiệu */
 .fi-sidebar-header a,
-.fi-sidebar-header span {
+.fi-sidebar-header > span {
     color: #E2E8F0 !important;
     font-weight: 700 !important;
     font-size: 15px !important;
@@ -185,6 +186,7 @@
     overflow: visible !important;
     max-width: 100% !important;
     z-index: 10 !important;
+    zoom: 0.9 !important; /* Zoom out to 90% for a more compact topbar */
 }
 
 .fi-topbar nav {
@@ -372,6 +374,7 @@
 .fi-ta {
     border-radius: var(--card-radius) !important;
     overflow: hidden;
+    zoom: 0.9 !important; /* Zoom out to 90% for higher data density */
 }
 
 /* Table header */
@@ -403,7 +406,65 @@
 
 /* Table cells */
 .fi-ta-cell {
-    padding: 0.625rem 1rem !important;
+    padding: 0.625rem 0.5rem !important; /* Optimized horizontal padding (1rem -> 0.5rem) */
+}
+
+/* Enable text wrapping for long data fields to avoid horizontal scroll */
+.fi-ta-text,
+.fi-ta-text p,
+.fi-ta-text span {
+    white-space: normal !important;
+    word-break: break-word !important; /* Standard for emails */
+    overflow-wrap: anywhere !important; /* For 2FA codes/long keys */
+    line-height: 1.4 !important;
+}
+
+/* Force specific max-widths for data-heavy columns */
+.fi-ta-content th,
+.fi-ta-content td {
+    overflow: hidden !important;
+}
+
+/* Platform Column */
+.fi-ta-col-platform {
+    min-width: 100px !important;
+    max-width: 150px !important;
+}
+
+/* Email Address Column (Wrapping required) */
+.fi-ta-col-email {
+    min-width: 200px !important;
+    max-width: 300px !important;
+}
+
+/* Password Column */
+.fi-ta-col-password {
+    min-width: 80px !important;
+    max-width: 120px !important;
+}
+
+/* Source Information Column (Wrapping required) */
+.fi-ta-col-state {
+    min-width: 200px !important;
+    max-width: 300px !important;
+}
+
+/* Platform Status Column */
+.fi-ta-col-platform-status {
+    min-width: 100px !important;
+    max-width: 150px !important;
+}
+
+/* Holder Column */
+.fi-ta-col-holder {
+    min-width: 80px !important;
+    max-width: 120px !important;
+}
+
+/* Actions Column (Usually the last) */
+.fi-ta-actions-cell {
+    width: 60px !important;
+    min-width: 60px !important;
 }
 
 /* Table text */
@@ -617,6 +678,7 @@ textarea.fi-input {
     border-radius: 10px !important;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08) !important;
     border: 1px solid var(--border-color) !important;
+    zoom: 0.9 !important; /* Zoom out to 90% for compact dropdowns */
 }
 
 .fi-dropdown-list-item-label {
@@ -683,13 +745,13 @@ textarea.fi-input {
     border: none !important;
     background: var(--card-bg) !important;
     box-shadow: none !important;
-    z-index: 50 !important; /* Ensure dropdowns are above table content */
+    z-index: 30 !important; /* THE SWEET SPOT: Higher than table headers (z-20), lower than backdrop (z-40) */
 }
 
 /* Ensure filter bar container doesn't clip children */
 .fi-ta-header-toolbar {
     overflow: visible !important;
-    z-index: 40 !important;
+    z-index: 25 !important;
 }
 
 /* ============================================
@@ -715,11 +777,7 @@ textarea.fi-input {
 /* ============================================
    20. RESPONSIVE — Desktop Optimizations
    ============================================ */
-@media (min-width: 1024px) {
-    :root {
-        --sidebar-width: 240px !important;
-    }
-}
+/* --sidebar-width đã khai báo tại :root (dòng 27) */
 
 @media (max-width: 1023px) {
     .fi-sidebar {
@@ -858,40 +916,7 @@ textarea.fi-input {
     width: 100%;
 }
 
-/* ============================================
-   26. BACK TO TOP BUTTON
-   ============================================ */
-#back-to-top {
-    position: fixed;
-    bottom: 25px;
-    right: 25px;
-    z-index: 100;
-    width: 40px;
-    height: 40px;
-    background: #1E293B;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    transition: all 0.3s ease;
-    border: 1px solid rgba(255,255,255,0.1);
-    opacity: 0.8;
-    display: none; /* Ẩn mặc định, hiện bằng JS */
-}
-
-#back-to-top:hover {
-    background: var(--accent-amber);
-    transform: translateY(-3px);
-    opacity: 1;
-}
-
-#back-to-top svg {
-    width: 20px;
-    height: 20px;
-}
+/* #back-to-top: Xem bộ luật chính thức ở cuối file (dòng ~1010) */
 
 /* ============================================
    27. EMAIL STATUS CHART RESPONSIVE (ES-)

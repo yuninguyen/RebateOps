@@ -12,13 +12,7 @@ class AccountPolicy
      * Helper function để kiểm tra có phải Admin không.
      * Thay 'yuninguyen.it@gmail.com' bằng email bạn dùng để đăng ký tài khoản Filament.
      */
-    /**private function isAdmin(User $user): bool
-    {
-        return $user->email === 'admin';
-    }
-    */
-
-    // Cấp toàn quyền cho Admin chặn trước mọi rules khác
+    // Cấp toàn quyền cho Admin
     public function before(User $user, string $ability): bool|null
     {
         if ($user->isAdmin()) {

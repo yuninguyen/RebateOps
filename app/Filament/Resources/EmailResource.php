@@ -144,8 +144,9 @@ class EmailResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('id')
                     ->label('ID')
-                    ->width('50px')
-                    ->sortable() // Cho phép bấm vào tiêu đề để sắp xếp tăng/giảm
+                    ->alignment(Alignment::Center)
+                    ->extraHeaderAttributes(['style' => 'width: 30px; min-width: 30px'])
+                    ->extraAttributes(['style' => 'width: 30px; min-width: 30px'])
                     ->searchable() // Cho phép tìm kiếm theo ID
                     ->toggleable() // Mặc định ẩn, khi nào cần thì bật lên cho đỡ chật bảng (isToggledHiddenByDefault: true)
                     ->color('gray'),
@@ -153,6 +154,8 @@ class EmailResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->alignment(Alignment::Center)
+                    ->extraHeaderAttributes(['style' => 'width: 50px; min-width: 50px'])
+                    ->extraAttributes(['style' => 'width: 50px; min-width: 50px'])
                     ->searchable()
                     ->toggleable() // Cho phép ẩn/hiện cột này
                     ->formatStateUsing(fn(string $state): string => static::STATUS_LABELS[$state] ?? static::STATUS_LABELS[strtolower($state)] ?? 'N/A')
@@ -169,7 +172,8 @@ class EmailResource extends Resource
                     ->alignment(Alignment::Center)
                     ->searchable()
                     ->wrap()
-                    ->width('200px')
+                    ->extraHeaderAttributes(['style' => 'width: 230px; min-width: 230px'])
+                    ->extraAttributes(['style' => 'width: 230px; min-width: 230px'])
                     ->copyable()
                     ->copyMessage('Copied email to clipboard!')
                     ->html()
@@ -216,6 +220,8 @@ class EmailResource extends Resource
                 Tables\Columns\TextColumn::make('recovery_email')
                     ->label('Recovery Email')
                     ->alignment(Alignment::Center)
+                    ->extraHeaderAttributes(['style' => 'width: 240px; min-width: 240px'])
+                    ->extraAttributes(['style' => 'width: 240px; min-width: 240px'])
                     ->copyable()
                     ->toggleable(), // Cho phép ẩn/hiện cột này
 
@@ -243,7 +249,14 @@ class EmailResource extends Resource
                     ->label('Platforms')
                     ->placeholder('N/A') // Nếu không có tài khoản nào đang dùng email này
                     ->alignment(Alignment::Center)
-                    ->formatStateUsing(fn($state) => is_array($state) ? implode(', ', $state) : $state) // Nếu có nhiều platform sẽ nối bằng dấu phẩy
+                    ->extraHeaderAttributes(['style' => 'width: 110px; min-width: 110px'])
+                    ->extraAttributes(['style' => 'width: 110px; min-width: 110px'])
+                    ->formatStateUsing(function ($state) {
+                        if (!$state) return 'N/A';
+                        $platforms_map = \App\Models\Platform::pluck('name', 'slug')->toArray();
+                        $items = is_array($state) ? $state : explode(', ', (string) $state);
+                        return collect($items)->map(fn($s) => $platforms_map[$s] ?? $s)->implode(', ');
+                    }) // Nếu có nhiều platform sẽ nối bằng dấu phẩy
                     ->toggleable(), // Cho phép ẩn/hiện cột này 
             ])
 
@@ -259,9 +272,9 @@ class EmailResource extends Resource
                             ->distinct()
                             ->pluck('provider') // Lấy mảng các giá trị provider
                             ->mapWithKeys(function ($item) {
-                                // Viết hoa chữ cái đầu và giữ nguyên giá trị gốc làm key
-                                return [$item => ucfirst($item)];
-                            })
+                            // Viết hoa chữ cái đầu và giữ nguyên giá trị gốc làm key
+                            return [$item => ucfirst($item)];
+                        })
                             ->toArray();
                     })
                     ->searchable() // Cho phép tìm nhanh nếu danh sách provider dài
@@ -326,11 +339,12 @@ class EmailResource extends Resource
                             $emailNote = $record->note ?? 'N/A'; // Khớp với trường 'note' trong DB
                             $provider = $record->provider ? ucfirst($record->provider) : 'Other'; // Hiển thị nhà cung cấp email nếu có, nếu không thì là 'Other'
                             $usage = $record->accounts_count > 0 ? "{$record->accounts_count}" : 'N/A';
-                            $platforms = $record->accounts->pluck('platform')->implode(', ') ?: 'N/A';
+                            $platforms_map = \App\Models\Platform::pluck('name', 'slug')->toArray();
+                            $platforms = $record->accounts->pluck('platform')->map(fn($s) => $platforms_map[$s] ?? $s)->implode(', ') ?: 'N/A';
 
                             $singleLine = " | {$id} | {$emailStatus} | {$yearCreated} | {$email} | {$emailPass} | {$recovery} | {$twoFA} | {$emailNote} | {$provider} | {$usage} | {$platforms} | ";
                             $finalSingleLine = $header . "\n" . $singleLine; // Kết hợp header và data
-
+                
                             $multiLine = "ID: {$id}\nStatus: {$emailStatus}\nYear Create: {$yearCreated}\nEmail Address: {$email}\nEmail Password: {$emailPass}\nRecovery Email: {$recovery}\n2FA: {$twoFA}\nEmail Note: {$emailNote}\nProvider: {$provider}\nUsage: {$usage}\nPlatforms: {$platforms}\n";
 
                             // Gộp cả 2 định dạng vào 1 lần copy
@@ -376,9 +390,9 @@ class EmailResource extends Resource
                                 // Tìm cột Status để bôi màu
                                 $statusIdx = array_search('Status', static::$emailHeaders);
                                 $sheetService->applyFormattingWithRules($targetTab, $statusIdx, [
-                                    'Live'     => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
-                                    'Disabled' => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],
-                                    'Locked'   => ['red' => 0.9,  'green' => 0.4,  'blue' => 0.4],
+                                    'Live' => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
+                                    'Disabled' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],
+                                    'Locked' => ['red' => 0.9, 'green' => 0.4, 'blue' => 0.4],
                                 ]);
 
                                 // Clip các cột dài (Email, Pass, Platforms, Note)
@@ -440,8 +454,9 @@ class EmailResource extends Resource
                                 $note = e($record->note ?? 'N/A'); // Đồng bộ đúng trường 'note'
                                 $provider = $record->provider ? ucfirst($record->provider) : 'Other';
                                 $usage = $record->accounts_count > 0 ? "{$record->accounts_count}" : 'N/A';
-                                $platforms = $record->accounts->pluck('platform')->implode(', ') ?: 'N/A'; // Lấy danh sách platform đang dùng email này
-
+                                $platforms_map = \App\Models\Platform::pluck('name', 'slug')->toArray();
+                                $platforms = $record->accounts->pluck('platform')->map(fn($s) => $platforms_map[$s] ?? $s)->implode(', ') ?: 'N/A'; // Lấy danh sách platform đang dùng email này
+                
                                 // Định dạng thông tin cho từng email
                                 $output .= " | {$id} | {$emailStatus} | {$yearCreated} | {$email} | {$pass} | {$recovery} | {$twoFA} | {$note} | {$provider} | {$usage} | {$platforms} | \n";
                             }

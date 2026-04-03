@@ -36,10 +36,11 @@ class PayoutLogResource extends Resource
         $query = parent::getEloquentQuery()
             ->withCount('children')
             // 🟢 TỐI ƯU: Chỉ lấy ngày exchange gần nhất thay vì load toàn bộ children vào RAM
-            ->addSelect(['exchanged_at' => \App\Models\PayoutLog::select('created_at')
-                ->whereColumn('parent_id', 'payout_logs.id')
-                ->latest()
-                ->limit(1),
+            ->addSelect([
+                'exchanged_at' => \App\Models\PayoutLog::select('created_at')
+                    ->whereColumn('parent_id', 'payout_logs.id')
+                    ->latest()
+                    ->limit(1),
             ]);
 
         // 2. Khóa chặt thứ tự sắp xếp Cha - Con (Đã fix lỗi SQL Sum cho Sếp)
@@ -120,7 +121,7 @@ class PayoutLogResource extends Resource
             (string) $record->id,
             (string) $record->created_at->format('d/m/Y H:i'),
             (string) ($record->account?->email?->email ?? 'N/A'),
-            (string) strtoupper($record->account?->platform ?? 'N/A'),
+            (string) (\App\Models\Platform::where('slug', $record->account?->platform)->value('name') ?? strtoupper($record->account?->platform ?? 'N/A')),
             (string) ($record->payoutMethod?->name ?? ($record->asset_type === 'gift_card' ? 'In-Hand' : 'N/A')),
             (string) strtoupper(str_replace('_', ' ', $record->asset_type ?? 'N/A')),
             (string) ucwords(str_replace('_', ' ', $record->gc_brand ?? 'N/A')),
@@ -187,7 +188,8 @@ class PayoutLogResource extends Resource
             $targetTab = 'Payout_Logs';
             $rows = $service->readSheet('A2:R', $targetTab);
 
-            if (empty($rows)) return;
+            if (empty($rows))
+                return;
 
             // 🟢 TỰ ĐỘNG TÌM VỊ TRÍ CỘT ĐỂ TRÁNH LỆCH KHI THÊM CỘT SAU NÀY
             $statusIdx = array_search('Status', static::$payoutLogHeaders);
@@ -204,7 +206,7 @@ class PayoutLogResource extends Resource
 
                         $log->update([
                             'status' => strtolower(trim($row[$statusIdx] ?? 'pending')),         // Index 16 là Status
-                            'note'   => trim($row[$noteIdx] ?? ''),                            // Index 17 là Note
+                            'note' => trim($row[$noteIdx] ?? ''),                            // Index 17 là Note
                         ]);
                         $count++;
                     }
@@ -418,7 +420,8 @@ class PayoutLogResource extends Resource
                             ->label('Source Account')
                             ->options(function (Forms\Get $get, ?\App\Models\PayoutLog $record) {
                                 $userId = $get('user_id');
-                                if (!$userId) return [];
+                                if (!$userId)
+                                    return [];
 
                                 $query = \App\Models\Account::query()->where('user_id', $userId);
 
@@ -427,14 +430,15 @@ class PayoutLogResource extends Resource
                                     // 🟢 CỐT LÕI NẰM Ở ĐÂY: Lọc bỏ tài khoản $0
                                     ->filter(function ($acc) use ($record) {
                                         // Giữ lại account nếu đang sửa đơn cũ
-                                        if ($record && $record->account_id === $acc->id) return true;
+                                        if ($record && $record->account_id === $acc->id)
+                                            return true;
 
                                         // Chỉ cho phép hiển thị các account có số dư > 0
                                         return self::getAvailableBalance($acc->id) > 0;
                                     })
                                     ->mapWithKeys(function ($acc) {
                                         $email = (string) ($acc->email?->email ?? 'No Email');
-                                        $platform = (string) ucwords($acc->platform ?? 'N/A');
+                                        $platform = (string) (\App\Models\Platform::where('slug', $acc->platform)->value('name') ?? ucwords($acc->platform ?? 'N/A'));
 
                                         // Hiển thị thêm số dư bên cạnh tên để nhân viên tự tin chọn
                                         $balance = number_format(self::getAvailableBalance($acc->id), 2);
@@ -492,7 +496,7 @@ class PayoutLogResource extends Resource
                             ->hidden(
                                 fn(Get $get) =>
                                 $get('asset_type') === 'gift_card' ||
-                                    (!auth()->user()?->isAdmin() && $get('asset_type') === 'paypal')
+                                (!auth()->user()?->isAdmin() && $get('asset_type') === 'paypal')
                             )
                             // Mờ đi khi là Gift Card
                             ->disabled(fn($get) => $get('asset_type') === 'gift_card')
@@ -515,10 +519,12 @@ class PayoutLogResource extends Resource
                             // 1. HIỂN THỊ NHÃN ĐẦY ĐỦ THÔNG TIN
                             ->options(function (Forms\Get $get) {
                                 $accId = $get('account_id');
-                                if (!$accId) return [];
+                                if (!$accId)
+                                    return [];
 
                                 $account = \App\Models\Account::find($accId);
-                                if (!$account) return [];
+                                if (!$account)
+                                    return [];
 
                                 return \App\Models\Brand::where('platform', $account->platform)
                                     ->get()
@@ -536,7 +542,8 @@ class PayoutLogResource extends Resource
                             // 2. LÀM MỜ NẾU VƯỢT GIỚI HẠN
                             ->disableOptionWhen(function (string $value, Forms\Get $get) {
                                 $accId = $get('account_id');
-                                if (!$accId) return false;
+                                if (!$accId)
+                                    return false;
 
                                 // 🟢 FIX DRY
                                 $availableBalance = self::getAvailableBalance($accId);
@@ -574,14 +581,16 @@ class PayoutLogResource extends Resource
                             ])
                             ->createOptionUsing(function (array $data, Forms\Get $get) {
                                 $account = \App\Models\Account::find($get('account_id'));
-                                if (!$account) throw new \Exception("Please select an account first.");
+                                if (!$account)
+                                    throw new \Exception("Please select an account first.");
 
                                 $data['platform'] = $account->platform;
                                 $brand = \App\Models\Brand::create($data);
                                 return $brand->slug;
                             })
                             ->afterStateUpdated(function ($state, $set, $get) {
-                                if (!$state) return;
+                                if (!$state)
+                                    return;
                                 $brand = \App\Models\Brand::where('slug', $state)->first();
                                 if ($brand) {
                                     $set('boost_percentage', $brand->boost_percentage ?? 0);
@@ -591,7 +600,8 @@ class PayoutLogResource extends Resource
                             ->rules([
                                 fn(Forms\Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
                                     $brand = \App\Models\Brand::where('slug', $value)->first();
-                                    if (!$brand || $brand->maximum_limit <= 0) return;
+                                    if (!$brand || $brand->maximum_limit <= 0)
+                                        return;
 
                                     // 🟢 FIX DRY
                                     $balance = self::getAvailableBalance($get('account_id'));
@@ -665,7 +675,8 @@ class PayoutLogResource extends Resource
                             // Hiển thị số dư khả dụng dưới dạng chữ nhỏ màu xanh
                             ->hint(function ($get) {
                                 $accountId = $get('account_id');
-                                if (!$accountId) return null;
+                                if (!$accountId)
+                                    return null;
 
                                 $lifetimeTotal = \App\Models\RebateTracker::where('account_id', $accountId)
                                     ->whereIn('status', ['pending', 'clicked', 'confirmed'])
@@ -732,7 +743,7 @@ class PayoutLogResource extends Resource
                             ->readOnly()
                             // CHỈ HIỆN KHI LÀ LIQUIDATION
                             ->visible(fn($get) => $get('transaction_type') === 'liquidation')
-                            ->formatStateUsing(fn($state) => $state ? number_format((float)$state, 0, ',', '.') : null)
+                            ->formatStateUsing(fn($state) => $state ? number_format((float) $state, 0, ',', '.') : null)
                             ->extraInputAttributes(['class' => 'font-bold text-primary-600'])
                             ->dehydrateStateUsing(fn($state) => $state ? str_replace('.', '', $state) : 0),
                     ])->columns(2),
@@ -770,21 +781,25 @@ class PayoutLogResource extends Resource
                 Tables\Columns\TextColumn::make('account_id')
                     ->label('Account Email')
                     ->alignment(Alignment::Start)
+                    ->extraHeaderAttributes(['style' => 'width: 200px; min-width: 200px'])
+                    ->extraAttributes(['style' => 'width: 200px; min-width: 200px'])
                     ->extraHeaderAttributes(['class' => 'centered-header'])
                     ->copyable()
                     ->copyMessage('Copied to clipboard!')
-                     ->wrap()
+                    ->wrap()
                     ->width('200px')
                     ->html() // Cho phép xuống dòng bằng thẻ <br>
                     ->formatStateUsing(function ($record) {
                         $account = $record->account;
-                        if (!$account) return 'N/A';
+                        if (!$account)
+                            return 'N/A';
 
                         // Lấy email từ bảng Email liên kết với Account
                         $email = $account->email?->email ?? 'N/A';
 
                         // Lấy platform trực tiếp từ bảng Account (Cột platform có sẵn trong bảng accounts)
-                        $platform = ucwords(str_replace(['_', '-'], ' ', $account->platform ?? 'N/A'));
+                        $platform_name = \App\Models\Platform::where('slug', $account->platform)->value('name');
+                        $platform = $platform_name ?? ucwords(str_replace(['_', '-'], ' ', $account->platform ?? 'N/A'));
 
                         return "
                                 <div style='line-height: 1.7;'>
@@ -810,11 +825,9 @@ class PayoutLogResource extends Resource
                 Tables\Columns\TextColumn::make('asset_info')
                     ->label('Asset Details')
                     ->alignment(Alignment::Start)
-                    ->extraHeaderAttributes(['class' => 'centered-header'])
                     ->copyable()
                     ->copyMessage('Copied to clipboard!')
                     ->wrap()
-                    ->width('250px')
                     ->html() // Cho phép xuống dòng bằng thẻ <br>
                     // 🟢 PHẢI CÓ: Ngăn sự kiện click bị trôi ra ngoài hàng (Row)
                     // 🟢 FIX 1: Thêm attribute để wrapper bao quanh toàn bộ cell
@@ -825,7 +838,8 @@ class PayoutLogResource extends Resource
                     ])
                     ->copyableState(function ($record) {
                         $data = $record->parent_id ? $record->parent : $record;
-                        if (!$data) return '';
+                        if (!$data)
+                            return '';
                         $prettyBrand = ucwords(str_replace('_', ' ', $data->gc_brand ?? 'N/A'));
                         $amount = number_format($record->net_amount_usd, 2);
                         // Trả về text thuần, không xuống dòng để copy chuẩn nhất
@@ -909,7 +923,7 @@ class PayoutLogResource extends Resource
                                 $childDate = ' ' . \Carbon\Carbon::parse($record->exchanged_at)->format('d/m/Y');
                             }
                             return new \Illuminate\Support\HtmlString(
-                                '<span style="color: #94a3b8; font-size: 11px;">(Exchanged!'.$childDate.')</span>'
+                                '<span style="color: #94a3b8; font-size: 11px;">(Exchanged!' . $childDate . ')</span>'
                             );
                         }
                         return null;
@@ -1060,7 +1074,8 @@ class PayoutLogResource extends Resource
                             //->dehydrated(true), // Đảm bảo trường này được gửi về backend
                             //->live(),  // Đồng bộ dữ liệu ngay lập tức
                             ->dehydrateStateUsing(function ($state) {
-                                if (blank($state)) return null;
+                                if (blank($state))
+                                    return null;
                                 try {
                                     // Dịch từ chuẩn VN (d/m/Y) sang chuẩn Quốc tế (Y-m-d) để MySQL hiểu
                                     return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
@@ -1082,7 +1097,8 @@ class PayoutLogResource extends Resource
                             //->dehydrated(true), // Đảm bảo trường này được gửi về backend
                             //->live(),  // Đồng bộ dữ liệu ngay lập tức
                             ->dehydrateStateUsing(function ($state) {
-                                if (blank($state)) return null;
+                                if (blank($state))
+                                    return null;
                                 try {
                                     // Dịch từ chuẩn VN (d/m/Y) sang chuẩn Quốc tế (Y-m-d) để MySQL hiểu
                                     return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
@@ -1153,17 +1169,17 @@ class PayoutLogResource extends Resource
                             ->live() // Bỏ onBlur để tính toán ngay khi đang gõ
                             ->afterStateUpdated(fn($set, $get) => self::calculateVnd($set, $get))
                             // Hiện gợi ý bên dưới để check lại số nghìn/triệu
-                            ->helperText(fn($state) => $state ? 'Typing: ' . number_format((float)$state, 0, ',', '.') . ' VNĐ' : null),
+                            ->helperText(fn($state) => $state ? 'Typing: ' . number_format((float) $state, 0, ',', '.') . ' VNĐ' : null),
 
                         Forms\Components\TextInput::make('total_vnd')
                             ->label('Total VND')
                             ->prefix('₫')
                             ->readOnly()
                             // 🟢 TUYỆT CHIÊU: Tự động thêm dấu chấm khi hiển thị
-                            ->formatStateUsing(fn($state) => $state ? number_format((float)$state, 0, ',', '.') : '0')
+                            ->formatStateUsing(fn($state) => $state ? number_format((float) $state, 0, ',', '.') : '0')
                             ->extraInputAttributes(['class' => 'font-bold text-success-600', 'style' => 'font-size: 1.2rem;'])
                             // 🟢 QUAN TRỌNG: Trước khi lưu vào DB, xóa hết dấu chấm để thành số thuần túy
-                            ->dehydrateStateUsing(fn($state) => (float)str_replace('.', '', $state ?? '0')),
+                            ->dehydrateStateUsing(fn($state) => (float) str_replace('.', '', $state ?? '0')),
                     ])
                     ->action(function ($record, array $data) {
                         // 🟢 LÀM SẠCH DỮ LIỆU TRƯỚC KHI LƯU
@@ -1227,7 +1243,7 @@ class PayoutLogResource extends Resource
                             try {
                                 $sheetService = app(\App\Services\GoogleSheetService::class);
                                 $targetTab = 'Payout_Logs'; // Tên Tab riêng cho Logs
-
+                
                                 // 1. Đảm bảo Tab tồn tại
                                 $sheetService->createSheetIfNotExist($targetTab);
 
@@ -1240,7 +1256,7 @@ class PayoutLogResource extends Resource
                                 // 4. Định dạng cột (Cột số tiền và tỷ giá thường dài nên cần Clip)
                                 $sheetService->formatColumnsAsClip($targetTab, 2, 3);  // Cột Date
                                 $sheetService->formatColumnsAsClip($targetTab, 16, 17); // Cột Note
-
+                
                                 \Filament\Notifications\Notification::make()
                                     ->title('Sync Logs Success!')
                                     ->body('Synced ' . count($records) . ' transaction(s) to Google Sheets.')
@@ -1282,7 +1298,7 @@ class PayoutLogResource extends Resource
                                 ->placeholder('Eg: 20000')
                                 ->numeric()
                                 ->helperText('💡 Enter the rate YOU WANT TO PAY the user. If left blank, it will default to the Market Rate (0 profit).'),
-                            
+
                             Forms\Components\TextInput::make('payout_percentage')
                                 ->label('Payout Percentage (%)')
                                 ->placeholder('Eg: 35')
@@ -1367,14 +1383,14 @@ class PayoutLogResource extends Resource
 
                                 // Tính tỷ giá thị trường trung bình
                                 $averageMarketRate = $totalUsd > 0 ? round($totalVndMarket / $totalUsd, 2) : 0;
-                                
+
                                 // Lấy tỷ giá trả user từ form (nếu không nhập thì lấy bằng tỷ giá thị trường)
                                 $payoutRate = (float) ($data['manual_payout_rate'] ?? $averageMarketRate);
                                 $payoutPercentage = (float) ($data['payout_percentage'] ?? 100);
 
                                 // Tiền thực trả = (Số lượng USD * Tỷ giá chi trả) * (% chi trả / 100)
                                 $totalVndPayout = floor(($totalUsd * $payoutRate) * ($payoutPercentage / 100));
-                                
+
                                 // Lợi nhuận = Tiền thực nhận về - Tiền thực trả cho User
                                 $profitVnd = $totalVndMarket - $totalVndPayout;
 
@@ -1419,7 +1435,8 @@ class PayoutLogResource extends Resource
 
     public static function getAvailableBalance($accountId): float
     {
-        if (!$accountId) return 0.0;
+        if (!$accountId)
+            return 0.0;
 
         // 🟢 Cache kết quả trong suốt 1 request để tránh query lặp lại
         if (isset(static::$balanceCache[$accountId])) {

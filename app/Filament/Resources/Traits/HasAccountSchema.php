@@ -51,7 +51,7 @@ trait HasAccountSchema
                         Forms\Components\Select::make('platform')
                             ->label('Platform')
                             ->placeholder('Rakuten, RetailMeNot, PayPal...')
-                            ->options(self::$platform)
+                            ->options(self::getPlatforms())
                             ->required()
                             ->native(false), // Giúp giao diện đồng bộ đẹp hơn
 
@@ -87,6 +87,7 @@ trait HasAccountSchema
                             ]),
 
                         Forms\Components\TextInput::make('password')
+                            ->label('Platform Password')
                             ->password() // Tự động ẩn mật khẩu khi nhập
                             ->revealable() // Thêm icon con mắt để bấm xem
                             ->required(),
@@ -146,7 +147,8 @@ trait HasAccountSchema
                             //->dehydrated(true), // Đảm bảo trường này được gửi về backend
                             //->live(),  // Đồng bộ dữ liệu ngay lập tức,
                             ->dehydrateStateUsing(function ($state) {
-                                if (blank($state)) return null;
+                                if (blank($state))
+                                    return null;
                                 try {
                                     // Dịch từ chuẩn VN (d/m/Y) sang chuẩn Quốc tế (Y-m-d) để MySQL hiểu
                                     return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
@@ -169,7 +171,8 @@ trait HasAccountSchema
                             //->dehydrated(true), // Đảm bảo trường này được gửi về backend
                             //->live(),  // Đồng bộ dữ liệu ngay lập tức,
                             ->dehydrateStateUsing(function ($state) {
-                                if (blank($state)) return null;
+                                if (blank($state))
+                                    return null;
                                 try {
                                     // Dịch từ chuẩn VN (d/m/Y) sang chuẩn Quốc tế (Y-m-d) để MySQL hiểu
                                     return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
@@ -235,7 +238,7 @@ trait HasAccountSchema
                         \Filament\Infolists\Components\TextEntry::make('platform')
                             ->label('Platform')
                             ->placeholder('N/A')
-                            ->formatStateUsing(fn($state) => $state ? (self::$platform[$state] ?? '') : 'N/A'),
+                            ->formatStateUsing(fn($state) => $state ? (\App\Models\Platform::where('slug', $state)->value('name') ?? $state) : 'N/A'),
                         \Filament\Infolists\Components\TextEntry::make('password')
                             ->label('Platform Password')
                             ->placeholder('N/A'),
@@ -259,24 +262,24 @@ trait HasAccountSchema
                             ->placeholder('N/A')
                             ->color(fn(string $state): string => match ($state) {
                                 'active' => 'gray',    // Màu xám nhạt
-                                'used'   => 'info',    // Màu xanh dương nhạt
+                                'used' => 'info',    // Màu xanh dương nhạt
                                 'no_paypal_needed' => 'warning', // Màu xanh dương đậm
                                 'not_linked' => 'warning', // Màu vàng nhạt
                                 'linked' => 'success', // Màu xanh lá nhạt
                                 'limited' => 'danger',   // Màu đỏ đậm
                                 'unlinked' => 'warning', // Màu vàng nhạt
                                 'banned' => 'danger',  // Màu đỏ đậm
-                                default  => 'gray',
+                                default => 'gray',
                             })
                             ->separator(',') // Hiển thị các nhãn cách nhau bằng dấu phẩy
                             ->formatStateUsing(fn(string $state): string => match ($state) {
-                                'used'   => 'In Use', // Đổi nhãn used thành In Use cho rõ nghĩa hơn
+                                'used' => 'In Use', // Đổi nhãn used thành In Use cho rõ nghĩa hơn
                                 'limited' => 'PayPal Limited', // Đổi riêng nhãn limited 
-                                'linked'  => 'Linked PayPal', // Đổi nhãn linked cho rõ ràng
-                                'unlinked'  => 'Unlinked PayPal', // Đổi nhãn unlinked
+                                'linked' => 'Linked PayPal', // Đổi nhãn linked cho rõ ràng
+                                'unlinked' => 'Unlinked PayPal', // Đổi nhãn unlinked
                                 'not_linked' => 'Not Linked to PayPal', // Đổi nhãn not_linked
                                 'no_paypal_needed' => 'No PayPal Required', // Đổi nhãn no_paypal_needed
-                                default   => ucfirst($state), // Các nhãn khác chỉ viết hoa chữ cái đầu
+                                default => ucfirst($state), // Các nhãn khác chỉ viết hoa chữ cái đầu
                             }),
                         \Filament\Infolists\Components\TextEntry::make('note')
                             ->label('Platform Note')
@@ -317,31 +320,36 @@ trait HasAccountSchema
             ->columns([
                 Tables\Columns\TextColumn::make('id')
                     ->label('ID')
+                    ->alignment(Alignment::Center)
                     ->searchable() // Cho phép tìm kiếm theo ID
                     ->toggleable() // Mặc định ẩn, khi nào cần thì bật lên cho đỡ chật bảng (isToggledHiddenByDefault: true)
+                    ->extraHeaderAttributes(['style' => 'width: 60px; min-width: 60px'])
+                    ->extraAttributes(['style' => 'width: 60px; min-width: 60px'])
                     ->color('gray'),
 
                 // Hiển thị nền tảng (Rakuten, PayPal...)
                 Tables\Columns\TextColumn::make('platform')
                     ->searchable()
                     ->alignment(Alignment::Center)
+                    ->extraHeaderAttributes(['style' => 'width: 80px; min-width: 80px'])
+                    ->extraAttributes(['style' => 'width: 80px; min-width: 80px'])
                     ->visible(static::class === \App\Filament\Resources\AccountResource::class)
-                    ->formatStateUsing(fn($state) => $state ? (self::$platform[$state] ?? '') : 'N/A'),
+                    ->formatStateUsing(fn($state) => $state ? (\App\Models\Platform::where('slug', $state)->value('name') ?? $state) : 'N/A'),
 
                 // HIỂN THỊ EMAIL TỪ BẢNG LIÊN KẾT
                 // Lấy từ quan hệ email() trong Model Account
                 TextColumn::make('email.email')
                     ->label('Email Address')
-                    ->alignment(Alignment::Start)
-                    ->extraHeaderAttributes(['class' => 'centered-header'])
-                    ->searchable()
+                    ->alignment(Alignment::Center)
+                    ->extraHeaderAttributes(['style' => 'width: 250px; min-width: 250px'])
+                    ->extraAttributes(['style' => 'width: 250px; min-width: 250px'])
                     ->wrap()
-                    ->grow()
-                    ->copyable()
-                    ->copyMessage('Copied email to clipboard!')
+                    ->searchable()
+                    ->action(fn() => null)
                     ->html()
                     ->formatStateUsing(function (Account $record): string {
                         $email = $record->email?->email ?? 'N/A';
+                        $platformPass = $record->password ?? 'N/A';
                         $pass = $record->email?->email_password ?? 'N/A';
                         $rec = $record->email?->recovery_email ?? 'N/A';
                         $twoFA = $record->email?->two_factor_code ?? 'N/A';
@@ -352,31 +360,61 @@ trait HasAccountSchema
                             'active', 'live' => ['Live', '#22c55e'],
                             'disabled' => ['Disabled', '#f59e0b'],
                             'locked' => ['Locked', '#ef4444'],
-                            default   => [
-                                (blank($emailStatus) || strtolower($emailStatus) === 'n/a') ? 'N/A' : ucfirst($emailStatus), 
+                            default => [
+                                (blank($emailStatus) || strtolower($emailStatus) === 'n/a') ? 'N/A' : ucfirst($emailStatus),
                                 '#6b7280'
                             ],
                         };
 
                         return "
-                            <div style='text-align: left; line-height: 1.6; padding-left: 0;'>
-                                <div style='margin-bottom: 2px; font-size: 14px;'>
-                                    <span style='color: #1e293b; font-weight: 700;'>{$email}</span>
+                            <div x-data='{ copied: null }' style='text-align: left; line-height: 1.6; padding-left: 0;'>
+                                <div style='margin-bottom: 2px;'>
+                                    <span style='color: #1e293b; font-weight: 700; cursor: pointer; position: relative;' 
+                                          x-on:click.stop.prevent='window.navigator.clipboard.writeText(\"{$email}\"); copied = \"email\"; setTimeout(() => copied = null, 5000)'
+                                          onclick='event.stopPropagation();'>
+                                        {$email}
+                                        <span x-show='copied === \"email\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ Copied!</span>
+                                    </span>
                                 </div>
-                
+
+                                <div style='margin-bottom: 2px;'>
+                                    <span style='color: #64748b;'>Platform Password: </span> 
+                                    <span style='color: #1e293b; cursor: pointer; position: relative;' 
+                                          x-on:click.stop.prevent='window.navigator.clipboard.writeText(\"{$platformPass}\"); copied = \"platform\"; setTimeout(() => copied = null, 5000)'
+                                          onclick='event.stopPropagation();'>
+                                        {$platformPass}
+                                        <span x-show='copied === \"platform\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ Copied!</span>
+                                    </span>
+                                </div>
+                                
                                 <div style='margin-bottom: 2px;'>
                                     <span style='color: #64748b;'>Email Password: </span> 
-                                    <span style='color: #1e293b;'>{$pass}</span>
+                                    <span style='color: #1e293b; cursor: pointer; position: relative;' 
+                                          x-on:click.stop.prevent='window.navigator.clipboard.writeText(\"{$pass}\"); copied = \"pass\"; setTimeout(() => copied = null, 5000)'
+                                          onclick='event.stopPropagation();'>
+                                        {$pass}
+                                        <span x-show='copied === \"pass\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ Copied!</span>
+                                    </span>
                                 </div>
 
                                 <div style='margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: wrap;'>
                                     <span style='color: #64748b;'>Recovery Email: </span> 
-                                    <span style='color: #1e293b;'>{$rec}</span>
+                                    <span style='color: #1e293b; cursor: pointer; position: relative;' 
+                                          x-on:click.stop.prevent='window.navigator.clipboard.writeText(\"{$rec}\"); copied = \"rec\"; setTimeout(() => copied = null, 5000)'
+                                          onclick='event.stopPropagation();'>
+                                        {$rec}
+                                        <span x-show='copied === \"rec\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ Copied!</span>
+                                    </span>
                                 </div>
 
                                 <div style='margin-bottom: 2px;'>
                                     <span style='color: #64748b;'>2FA/Code: </span> 
-                                    <span style='color: #1e293b;'>{$twoFA}</span>
+                                    <span style='color: #1e293b; cursor: pointer; position: relative;' 
+                                          x-on:click.stop.prevent='window.navigator.clipboard.writeText(\"{$twoFA}\"); copied = \"twoFA\"; setTimeout(() => copied = null, 5000)'
+                                          onclick='event.stopPropagation();'>
+                                        {$twoFA}
+                                        <span x-show='copied === \"twoFA\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ Copied!</span>
+                                    </span>
                                 </div>
                             
                                 <div style='margin-top: 8px; padding-top: 4px; border-top: 1px solid #f1f5f9; line-height: 1.8;'>
@@ -394,23 +432,16 @@ trait HasAccountSchema
                         ";
                     }),
 
-                // Hiển thị Password và cho phép Click để Copy
-                TextColumn::make('password')
-                    ->label('Password')
-                    ->alignment(Alignment::Center)
-                    ->width('120px')
-                    ->copyable()
-                    ->copyMessage('Copied password to clipboard!')
-                    ->copyMessageDuration(1500),
+
 
                 // Column Gộp: Metadata (States, Device, PayPal Information)
                 TextColumn::make('state')
                     ->label('Source Information')
-                    ->width('250px')
-                    ->alignment(Alignment::Start)
-                    ->extraHeaderAttributes(['class' => 'centered-header'])
+                    ->alignment(Alignment::Center)
                     ->toggleable()
-                    ->copyable()
+                    ->width('250px')
+                    ->extraHeaderAttributes(['style' => 'width: 200px; min-width: 200px'])
+                    ->extraAttributes(['style' => 'width: 200px; min-width: 200px'])
                     ->wrap()
                     ->html()
                     ->formatStateUsing(function (Account $record): string {
@@ -422,8 +453,8 @@ trait HasAccountSchema
                         $device = $record->device ?? 'N/A';
                         $paypal = $record->paypal_info ?? 'N/A';
                         $devicePaypal = $record->device_linked_paypal ?? 'N/A';
-                        $created = $record->account_created_at ? $record->account_created_at->format('d/m/Y') : 'N/A';
-                        $linked = $record->paypal_linked_at ? $record->paypal_linked_at->format('d/m/Y') : 'N/A';
+                        $created = $record->account_created_at ? \Carbon\Carbon::parse($record->account_created_at)->format('d/m/Y') : 'N/A';
+                        $linked = $record->paypal_linked_at ? \Carbon\Carbon::parse($record->paypal_linked_at)->format('d/m/Y') : 'N/A';
 
                         return "
                             <div style='justify-content: flex-start !important; text-align: left; line-height: 1.6; max-width: 250px; padding-left: 0;'>
@@ -467,24 +498,24 @@ trait HasAccountSchema
                     ->alignment(Alignment::Center)
                     ->color(fn(string $state): string => match ($state) {
                         'active' => 'gray',    // Màu xám nhạt
-                        'used'   => 'info',    // Màu xanh dương nhạt
+                        'used' => 'info',    // Màu xanh dương nhạt
                         'no_paypal_needed' => 'warning', // Màu xanh dương đậm
                         'not_linked' => 'warning', // Màu vàng nhạt
                         'linked' => 'success', // Màu xanh lá nhạt
                         'limited' => 'danger',   // Màu đỏ đậm
                         'unlinked' => 'warning', // Màu vàng nhạt
                         'banned' => 'danger',  // Màu đỏ đậm
-                        default  => 'gray',
+                        default => 'gray',
                     })
                     ->separator(',') // Hiển thị các nhãn cách nhau bằng dấu phẩy
                     ->formatStateUsing(fn(string $state): string => match ($state) {
-                        'used'   => 'In Use', // Đổi nhãn used thành In Use cho rõ nghĩa hơn
+                        'used' => 'In Use', // Đổi nhãn used thành In Use cho rõ nghĩa hơn
                         'limited' => 'PayPal Limited', // Đổi riêng nhãn limited 
-                        'linked'  => 'Linked PayPal', // Đổi nhãn linked cho rõ ràng
-                        'unlinked'  => 'Unlinked PayPal', // Đổi nhãn unlinked
+                        'linked' => 'Linked PayPal', // Đổi nhãn linked cho rõ ràng
+                        'unlinked' => 'Unlinked PayPal', // Đổi nhãn unlinked
                         'not_linked' => 'Not Linked to PayPal', // Đổi nhãn not_linked
                         'no_paypal_needed' => 'No PayPal Required', // Đổi nhãn no_paypal_needed
-                        default   => ucfirst($state), // Các nhãn khác chỉ viết hoa chữ cái đầu
+                        default => ucfirst($state), // Các nhãn khác chỉ viết hoa chữ cái đầu
                     })
                     ->tooltip(function (Tables\Columns\TextColumn $column, Account $record): string {
                         // Lấy mảng các trạng thái hiện có của tài khoản
@@ -504,7 +535,7 @@ trait HasAccountSchema
                         return collect($statuses)
                             ->map(fn($s) => ($explanations[$s] ?? 'Trạng thái hệ thống'))
                             ->join("\n"); // Các giải thích sẽ xuống dòng nếu có nhiều badge
-
+            
                     }),
 
                 //Hiển thị ghi chú (note) nếu có, dưới dạng chữ nhỏ màu xanh dương
@@ -551,22 +582,6 @@ trait HasAccountSchema
 
             ->persistFiltersInSession() // Ghi nhớ bộ lọc trong phiên làm việc
             ->filters([
-                // Thêm bộ lọc Sắp xếp
-                Tables\Filters\SelectFilter::make('sort_by')
-                    ->label('Sort Order')
-                    ->options([
-                        'newest' => 'Newest First', // Mới nhất đến cũ
-                        'oldest' => 'Oldest First', // Cũ nhất đến mới
-                    ])
-                    ->placeholder('Default')
-                    ->query(function ($query, array $data) {
-                        if ($data['value'] === 'newest') {
-                            return $query->reorder('account_created_at', 'desc');
-                        }
-                        if ($data['value'] === 'oldest') {
-                            return $query->reorder('account_created_at', 'asc');
-                        }
-                    }),
                 // Lọc theo Status Email
                 SelectFilter::make('email_status')
                     ->label('Email Status')
@@ -589,15 +604,14 @@ trait HasAccountSchema
                             ->distinct()
                             ->whereNotNull('platform')
                             ->pluck('platform', 'platform')
-                            ->map(fn($label) => (string)$label)
+                            ->map(fn($label) => (string) $label)
                             ->toArray();
 
                         // 🟢 2. FORMAT LẠI NHÃN (LABEL) NGAY BÊN TRONG HÀM OPTIONS
+                        $platforms_map = \App\Models\Platform::pluck('name', 'slug')->toArray();
                         $formattedOptions = [];
                         foreach ($platforms as $p) {
-                            // Dùng mảng $platform từ Trait HasPlatform của bạn để map label, 
-                            // nếu không có thì giữ nguyên tên gốc
-                            $formattedOptions[$p] = self::$platform[$p] ?? $p;
+                            $formattedOptions[$p] = $platforms_map[$p] ?? $p;
                         }
 
                         return $formattedOptions;
@@ -693,11 +707,11 @@ trait HasAccountSchema
                     ->form(function (Account $record) {
                         $emailAddress = strtolower($record->email?->email ?? '');
                         $isGmail = str_ends_with($emailAddress, '@gmail.com');
-                        
+
                         if ($isGmail) {
                             $warningTitle = __('system.gmail_warning_title');
                             $warningDesc = __('system.gmail_warning_desc');
-                            
+
                             return [
                                 Forms\Components\Placeholder::make('warning')
                                     ->label('')
@@ -716,7 +730,7 @@ trait HasAccountSchema
                                     ]),
                             ];
                         }
-                        
+
                         return [
                             Forms\Components\Placeholder::make('msg')
                                 ->label('')
@@ -727,7 +741,7 @@ trait HasAccountSchema
                     ->action(function (Account $record, array $data) {
                         // Kiểm tra nếu tài khoản đang bị Banned thì báo lỗi
                         $statuses = is_array($record->status) ? $record->status : [$record->status];
-                        
+
                         if (in_array('banned', $statuses)) {
                             \Filament\Notifications\Notification::make()
                                 ->title('Cannot claim a Banned account!')
@@ -788,7 +802,8 @@ trait HasAccountSchema
                                         //->dehydrated(true), // Đảm bảo trường này được gửi về backend
                                         //->live(),  // Đồng bộ dữ liệu ngay lập tức,
                                         ->dehydrateStateUsing(function ($state) {
-                                            if (blank($state)) return null;
+                                            if (blank($state))
+                                                return null;
                                             try {
                                                 // Dịch từ chuẩn VN (d/m/Y) sang chuẩn Quốc tế (Y-m-d) để MySQL hiểu
                                                 return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
@@ -826,7 +841,7 @@ trait HasAccountSchema
                                 'order_id' => $data['order_id'],
                                 'order_value' => $data['order_value'],
                                 'cashback_percent' => $data['cashback_percent'],
-                                'rebate_amount' => (float)$data['order_value'] * ($data['cashback_percent'] / 100),
+                                'rebate_amount' => (float) $data['order_value'] * ($data['cashback_percent'] / 100),
                                 'status' => 'clicked', // Mặc định là đã click/mua
                             ]);
                         })
@@ -845,17 +860,17 @@ trait HasAccountSchema
                             $header = " | ID | Email Status | Year Created | Email Address | Email Password | Recovery Email | 2FA Code | Email Note | Platform | Platform Password | State | Device Create | Date Create | Platform Status | Platform Note | Holder | Personal Information | Device Linked | Date Linked PayPal | ";
 
                             $id = $record->id; // Lấy ID của Account
-
+                
                             // Lấy thông tin từ Email gốc
                             $emailStatus = $record->email?->status ?? 'N/A'; // Lấy Status từ bảng Email
                             // Chuyển đổi sang nhãn hiển thị Live/Disabled/Locked
                             $emailstatusLabels = [
                                 'active' => 'Live',
                                 'disabled' => 'Disabled',
-                                'locked'   => 'Locked',
+                                'locked' => 'Locked',
                             ];
                             $emailStatus = $emailstatusLabels[$emailStatus] ?? ucfirst($emailStatus); // Kết quả: "Active, Locked" hoặc "Disabled"
-
+                
                             // Lấy ngày tạo từ bảng Email thay vì bảng Account
                             $emailDateCreated = $record->email?->email_created_at ? $record->email->email_created_at->format('d/m/Y') : 'N/A';
                             // Lấy năm từ email_created_at của Email, nếu không có thì lấy N/A
@@ -878,7 +893,7 @@ trait HasAccountSchema
                             $devicePaypal = $record->device_linked_paypal ?? 'N/A';
                             // Định dạng Ngày Linked PayPal (Nếu trống thì hiện "N/A")
                             $dateLinked = $record->paypal_linked_at ? $record->paypal_linked_at->format('d/m/Y') : 'N/A';
-                            $platformstatus = $record->status ? implode(', ', (array)$record->status) : 'N/A';
+                            $platformstatus = $record->status ? implode(', ', (array) $record->status) : 'N/A';
                             $statusLabels = [
                                 'active' => 'Active',
                                 'used' => 'In Use',
@@ -890,7 +905,7 @@ trait HasAccountSchema
                                 'no_paypal_needed' => 'No PayPal Required',
                             ];
                             // Chuyển mảng status (nếu có nhiều status) thành chuỗi nhãn đẹp
-                            $currentStatuses = is_array($record->status) ? $record->status : explode(',', (string)$record->status);
+                            $currentStatuses = is_array($record->status) ? $record->status : explode(',', (string) $record->status);
 
                             $platformstatus = collect($currentStatuses)
                                 ->map(function ($s) use ($statusLabels) {
@@ -898,7 +913,7 @@ trait HasAccountSchema
                                     return $statusLabels[$key] ?? ucfirst($key);
                                 })
                                 ->join(', '); // Kết quả: "Active, Not Linked to PayPal"
-
+                
                             $note = $record->note ?? 'N/A';
                             $holder = $record->user?->name ?? 'N/A';
 
@@ -907,7 +922,7 @@ trait HasAccountSchema
                             // ĐỊNH DẠNG 1: Tất cả trên 1 dòng (Ngăn cách bằng dấu |)
                             $singleLine = " | {$id} | {$emailStatus} | {$yearCreated} | {$email} | {$emailPass} | {$recovery} | {$twoFA} | {$emailNote} | {$record->platform} | {$record->password} | {$stateName} | {$device} | {$platformDateCreated} | {$platformstatus} | {$note} | {$holder} | {$paypal} | {$devicePaypal} | {$dateLinked} | \n";
                             $finalSingleLine = $header . "\n" . $singleLine; // Kết hợp header và data
-
+                
                             // ĐỊNH DẠNG 2: Chia thành nhiều dòng chi tiết
                             $multiLine =
                                 "EMAIL INFORMATION:\n" .
@@ -962,7 +977,7 @@ trait HasAccountSchema
                             // Trước đây chỉ lấy platform của record đầu tiên → các platform khác bị đẩy sai tab.
                             $grouped = $records->groupBy(fn($r) => $r->platform ?: 'General');
 
-                            $totalUpdated  = 0;
+                            $totalUpdated = 0;
                             $totalAppended = 0;
 
                             foreach ($grouped as $platform => $items) {
@@ -983,8 +998,8 @@ trait HasAccountSchema
                                 $sheetService->formatColumnsAsClip($targetTab, 5, 6);   // Note Email (F)
                                 $sheetService->formatColumnsAsClip($targetTab, 14, 15); // Platform Note (O)
                                 $sheetService->formatColumnsAsClip($targetTab, 17, 18); // Personal Info (R)
-
-                                $totalUpdated  += $result['updated'];
+                
+                                $totalUpdated += $result['updated'];
                                 $totalAppended += $result['appended'];
                             }
 
@@ -1003,7 +1018,7 @@ trait HasAccountSchema
                         ->requiresConfirmation()
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
                             $currentUserId = auth()->id(); // Lấy con số ID (ví dụ: 1, 2, 3)
-
+                
                             foreach ($records as $record) {
                                 // Kiểm tra nếu chưa có ai nhận (user_id đang trống)
                                 if (empty($record->user_id)) {
@@ -1049,17 +1064,17 @@ trait HasAccountSchema
                                 $emailstatusLabels = [
                                     'active' => 'Live',
                                     'disabled' => 'Disabled',
-                                    'locked'   => 'Locked',
+                                    'locked' => 'Locked',
                                 ];
                                 $emailStatus = $emailstatusLabels[$emailStatus] ?? ucfirst($emailStatus); // Kết quả: "Active, Locked" hoặc "Disabled"
-
+                
                                 $yearCreated = $record->email?->email_created_at ? $record->email->email_created_at->format('Y') : 'N/A';
                                 $email = $record->email?->email ?? 'N/A';
                                 $emailPass = $record->email?->email_password ?? 'N/A';
                                 $recovery = $record->email?->recovery_email ?? 'N/A';
                                 $twoFA = $record->email?->two_factor_code ?? 'N/A';
                                 $emailNote = $record->email?->note ?? 'N/A'; // Email Note từ bảng Email
-
+                
                                 // Lấy thông tin từ Account (Platform)
                                 $platform = $record->platform ?? 'N/A';
                                 $passPlatform = $record->password ?? 'N/A';
@@ -1076,7 +1091,7 @@ trait HasAccountSchema
                                 $dateLinked = $record->paypal_linked_at ? $record->paypal_linked_at->format('d/m/Y') : 'N/A';
 
 
-                                $platformstatus = $record->status ? implode(', ', (array)$record->status) : 'N/A';
+                                $platformstatus = $record->status ? implode(', ', (array) $record->status) : 'N/A';
                                 $stateName = self::$usStates[$record->state] ?? $record->state ?? 'N/A';
                                 $statusLabels = [
                                     'active' => 'Active',
@@ -1094,7 +1109,7 @@ trait HasAccountSchema
                                 $platformstatus = collect($currentStatuses)
                                     ->map(fn($s) => $statusLabels[$s] ?? ucfirst($s))
                                     ->join(', '); // Đổi từ | sang dấu phẩy ở đây
-
+                
                                 $accNote = $record->note ?? 'N/A'; // Account Note
                                 $holder = $record->user?->name ?? 'N/A';
 
@@ -1151,13 +1166,13 @@ trait HasAccountSchema
         $statusArray = is_array($rawStatuses) ? $rawStatuses : (json_decode($rawStatuses, true) ?? [$rawStatuses]);
         $mappedPlatformStatuses = array_map(function ($status) {
             return match ($status) {
-                'used'             => 'In Use',
-                'limited'          => 'PayPal Limited',
-                'linked'           => 'Linked PayPal',
-                'unlinked'         => 'Unlinked PayPal',
-                'not_linked'       => 'Not Linked to PayPal',
+                'used' => 'In Use',
+                'limited' => 'PayPal Limited',
+                'linked' => 'Linked PayPal',
+                'unlinked' => 'Unlinked PayPal',
+                'not_linked' => 'Not Linked to PayPal',
                 'no_paypal_needed' => 'No PayPal Required',
-                default            => ucfirst(str_replace('_', ' ', (string)$status)),
+                default => ucfirst(str_replace('_', ' ', (string) $status)),
             };
         }, array_filter($statusArray));
         $platformStatusString = implode(' → ', $mappedPlatformStatuses);
@@ -1165,26 +1180,26 @@ trait HasAccountSchema
         // 2. Logic xử lý EMAIL STATUS (Yêu cầu mới của bạn)
         $rawEmailStatus = $record->email?->status;
         $emailStatusLabel = match ($rawEmailStatus) {
-            'active'   => 'Live',
+            'active' => 'Live',
             'disabled' => 'Disabled',
-            'locked'   => 'Locked',
-            null       => 'N/A',
-            default    => ucfirst((string)$rawEmailStatus),
+            'locked' => 'Locked',
+            null => 'N/A',
+            default => ucfirst((string) $rawEmailStatus),
         };
 
         // 3. KHỞI TẠO KHUNG 19 CỘT (0 -> 18) ĐỂ TRÁNH LỖI JSON PAYLOAD 400
         $data = array_fill(0, 19, '');
 
-        $data[0]  = $record->id;                                                                                // ID
-        $data[1]  = $record->email?->email ?? 'N/A';                                                            // Email Address
-        $data[2]  = $record->email?->email_password ?? 'N/A';                                                   // Email Password
-        $data[3]  = $record->email?->recovery_email ?? 'N/A';                                                   // Recovery Email
-        $data[4]  = $record->email?->two_factor_code ?? 'N/A';                                                  // 2FA/Code
-        $data[5]  = $record->email?->note ?? 'N/A';                                                             // Note (Email)
-        $data[6]  = $emailStatusLabel;                                                                          // CỘT G: Status (Email) - ĐÃ APPLY MAP
-        $data[7]  = $record->platform;                                                                          // Platform
-        $data[8]  = $record->password;                                                                          // Platform Password
-        $data[9]  = $record->state ? "{$record->state} - " . (self::$usStates[$record->state] ?? '') : 'N/A';   // State Create
+        $data[0] = $record->id;                                                                                // ID
+        $data[1] = $record->email?->email ?? 'N/A';                                                            // Email Address
+        $data[2] = $record->email?->email_password ?? 'N/A';                                                   // Email Password
+        $data[3] = $record->email?->recovery_email ?? 'N/A';                                                   // Recovery Email
+        $data[4] = $record->email?->two_factor_code ?? 'N/A';                                                  // 2FA/Code
+        $data[5] = $record->email?->note ?? 'N/A';                                                             // Note (Email)
+        $data[6] = $emailStatusLabel;                                                                          // CỘT G: Status (Email) - ĐÃ APPLY MAP
+        $data[7] = $record->platform;                                                                          // Platform
+        $data[8] = $record->password;                                                                          // Platform Password
+        $data[9] = $record->state ? "{$record->state} - " . (self::$usStates[$record->state] ?? '') : 'N/A';   // State Create
         $data[10] = $record->device ?? 'N/A';                                                                   // Device Create
         $data[11] = $record->account_created_at?->format('d/m/Y') ?? 'N/A';                                     // Date Create        
         $data[12] = $platformStatusString;                                                                      // Platform Status

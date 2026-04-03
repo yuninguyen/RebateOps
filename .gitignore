@@ -25,3 +25,4 @@ Thumbs.db
 
 # Google Sheets credentials
 /storage/app/google-auth.json
+.gitnexus

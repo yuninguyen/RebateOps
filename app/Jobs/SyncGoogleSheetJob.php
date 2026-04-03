@@ -151,7 +151,7 @@ class SyncGoogleSheetJob implements ShouldQueue
             $query->with(['account.email', 'payoutMethod']);
         }
 
-        return $query->find($this->recordId);
+        return $query->withTrashed()->find($this->recordId);
     }
 
     protected function applySpecificFormatting(GoogleSheetService $service, string $tabName): void

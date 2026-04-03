@@ -15,6 +15,14 @@ class RebateTracker extends Model
 
     use SoftDeletes;
 
+    protected $casts = [
+        'order_value'      => 'decimal:2',
+        'cashback_percent' => 'decimal:2',
+        'rebate_amount'    => 'decimal:2',
+        'transaction_date' => 'date',
+        'payout_date'      => 'date',
+    ];
+
     protected $fillable = [
         'account_id',
         'transaction_date',

@@ -6,6 +6,7 @@ use App\Models\PayoutLog;
 use App\Services\GoogleSheetService;
 use App\Jobs\SyncGoogleSheetJob;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class PayoutLogObserver implements ShouldHandleEventsAfterCommit
@@ -15,12 +16,9 @@ class PayoutLogObserver implements ShouldHandleEventsAfterCommit
      */
     public function saved(PayoutLog $payoutLog): void
     {
-        // 🟢 1. LOGIC ĐỒNG BỘ NỘI BỘ (DATABASE)
-        // Nếu là dòng thanh khoản (liquidation), cập nhật tỷ giá và VND cho dòng cha
         if ($payoutLog->transaction_type === 'liquidation' && $payoutLog->parent_id) {
             $parent = $payoutLog->parent;
             if ($parent) {
-                // Chỉ update nếu có sự thay đổi về tiền tệ
                 if ($payoutLog->wasChanged(['exchange_rate', 'total_vnd']) || $payoutLog->wasRecentlyCreated) {
                     $parent->updateQuietly([
                         'exchange_rate' => $payoutLog->exchange_rate,
@@ -30,42 +28,54 @@ class PayoutLogObserver implements ShouldHandleEventsAfterCommit
             }
         }
 
-        // 🟢 NẾU ĐANG SYNC TỪ SHEET VỀ THÌ KHÔNG ĐẨY JOB NGƯỢC LÊN NỮA
         if (isset($payoutLog->is_syncing_from_sheet) && $payoutLog->is_syncing_from_sheet) {
             return;
         }
 
-        // 🟢 2. ĐẨY JOB LÊN GOOGLE SHEETS
-        // Thay vì gọi syncToSheet trực tiếp (làm chậm web), ta đẩy vào Job để chạy ngầm
         \App\Jobs\SyncGoogleSheetJob::dispatch($payoutLog->id, get_class($payoutLog));
     }
 
     /**
      * Sự kiện UPDATED: Xử lý thay đổi Status để cộng/trừ tiền ví
+     * FIX #1: Hỗ trợ rollback khi chuyển ngược status (completed → pending)
+     * FIX #2: Dùng DB::transaction + lockForUpdate để tránh race condition
      */
     public function updated(PayoutLog $payoutLog): void
     {
-        // 🟢 3. CẬP NHẬT BALANCE (Chỉ chạy khi status từ Pending -> Completed)
-        if ($payoutLog->wasChanged('status') && $payoutLog->status === 'completed') {
-            $method = $payoutLog->payoutMethod;
+        if (!$payoutLog->wasChanged('status')) {
+            return;
+        }
 
-            if ($method) {
-                // Nếu là Withdrawal (Dành cho PayPal): Cộng tiền vào ví
+        $oldStatus = $payoutLog->getOriginal('status');
+        $newStatus = $payoutLog->status;
+        $method = $payoutLog->payoutMethod;
+
+        if (!$method) {
+            return;
+        }
+
+        DB::transaction(function () use ($payoutLog, $oldStatus, $newStatus, $method) {
+            // Lock ví để tránh race condition khi nhiều giao dịch cùng lúc
+            $method = $method->lockForUpdate()->find($method->id);
+
+            // Rollback: completed → khác (hoàn lại balance)
+            if ($oldStatus === 'completed' && $newStatus !== 'completed') {
+                if ($payoutLog->transaction_type === 'withdrawal') {
+                    $method->decrement('current_balance', $payoutLog->net_amount_usd);
+                } elseif (in_array($payoutLog->transaction_type, ['hold', 'liquidation'])) {
+                    $method->increment('current_balance', $payoutLog->amount_usd);
+                }
+            }
+
+            // Forward: khác → completed (áp dụng balance)
+            if ($newStatus === 'completed' && $oldStatus !== 'completed') {
                 if ($payoutLog->transaction_type === 'withdrawal') {
                     $method->increment('current_balance', $payoutLog->net_amount_usd);
-                }
-
-                // Hold (Keep Code - Gift Card đã nhận về tay): TRỪ balance vì đã dùng tiền mua GC
-                // FIX #5: Sửa comment cho đúng với thực tế code (decrement, không phải increment)
-                elseif ($payoutLog->transaction_type === 'hold') {
-                    $method->decrement('current_balance', $payoutLog->amount_usd);
-                }
-                // Nếu là Liquidation: Trừ tiền khỏi ví (vì đã lấy tiền mặt VND)
-                elseif ($payoutLog->transaction_type === 'liquidation') {
+                } elseif (in_array($payoutLog->transaction_type, ['hold', 'liquidation'])) {
                     $method->decrement('current_balance', $payoutLog->amount_usd);
                 }
             }
-        }
+        });
     }
 
     /**

@@ -25,7 +25,21 @@ class User extends Authenticatable implements FilamentUser
     public function accounts(): HasMany
     {
         return $this->hasMany(Account::class, 'user_id');
-        // Đảm bảo 'user_id' là tên cột khóa ngoại trong bảng accounts
+    }
+
+    public function rebateTrackers(): HasMany
+    {
+        return $this->hasMany(RebateTracker::class, 'user_id');
+    }
+
+    public function payoutLogs(): HasMany
+    {
+        return $this->hasMany(PayoutLog::class, 'user_id');
+    }
+
+    public function userPayments(): HasMany
+    {
+        return $this->hasMany(UserPayment::class, 'user_id');
     }
 
     public function isAdmin(): bool

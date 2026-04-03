@@ -83,7 +83,6 @@
     display: inline-block !important;
     opacity: 1 !important;
     visibility: visible !important;
-    pointer-events: auto !important;
 }
 
 /* Đảm bảo Sidebar Desktop luôn rạng rỡ */
@@ -95,9 +94,9 @@
     }
 }
 
-/* Brand name / logo */
+/* Brand name / logo — chỉ nhắm vào nội dung thương hiệu */
 .fi-sidebar-header a,
-.fi-sidebar-header span {
+.fi-sidebar-header > span {
     color: #E2E8F0 !important;
     font-weight: 700 !important;
     font-size: 15px !important;
@@ -591,13 +590,12 @@ textarea.fi-input {
 }
 
 .fi-modal-description {
-    margin-bottom: 1.25rem !important;
+    margin-bottom: 1rem !important;
     color: var(--text-muted) !important;
-    font-size: 14px !important;
 }
 
 .fi-modal-content {
-    padding: 0.75rem 1.5rem 1.5rem !important;
+    padding: 1rem 1.5rem 1.5rem !important;
 }
 
 /* ============================================
@@ -685,13 +683,13 @@ textarea.fi-input {
     border: none !important;
     background: var(--card-bg) !important;
     box-shadow: none !important;
-    z-index: 50 !important; /* Ensure dropdowns are above table content */
+    z-index: 30 !important; /* THE SWEET SPOT: Higher than table headers (z-20), lower than backdrop (z-40) */
 }
 
 /* Ensure filter bar container doesn't clip children */
 .fi-ta-header-toolbar {
     overflow: visible !important;
-    z-index: 40 !important;
+    z-index: 25 !important;
 }
 
 /* ============================================
@@ -717,11 +715,7 @@ textarea.fi-input {
 /* ============================================
    20. RESPONSIVE — Desktop Optimizations
    ============================================ */
-@media (min-width: 1024px) {
-    :root {
-        --sidebar-width: 240px !important;
-    }
-}
+/* --sidebar-width đã khai báo tại :root (dòng 27) */
 
 @media (max-width: 1023px) {
     .fi-sidebar {
@@ -860,40 +854,7 @@ textarea.fi-input {
     width: 100%;
 }
 
-/* ============================================
-   26. BACK TO TOP BUTTON
-   ============================================ */
-#back-to-top {
-    position: fixed;
-    bottom: 25px;
-    right: 25px;
-    z-index: 9999 !important;
-    width: 40px;
-    height: 40px;
-    background: #1E293B;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    transition: all 0.3s ease;
-    border: 1px solid rgba(255,255,255,0.1);
-    opacity: 0.8;
-    display: none; /* JS điều khiển hiện/ẩn */
-}
-
-#back-to-top:hover {
-    background: var(--accent-amber);
-    transform: translateY(-3px);
-    opacity: 1;
-}
-
-#back-to-top svg {
-    width: 20px;
-    height: 20px;
-}
+/* #back-to-top: Xem bộ luật chính thức ở cuối file (dòng ~1010) */
 
 /* ============================================
    27. EMAIL STATUS CHART RESPONSIVE (ES-)
@@ -1007,4 +968,34 @@ textarea.fi-input {
         font-size: 9px !important;
         padding: 4px 2px !important;
     }
+}
+
+/* 🟢 NÚT BACK TO TOP - HOÀN THIỆN */
+#back-to-top {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 44px;
+    height: 44px;
+    background: #1e293b;
+    color: white;
+    border-radius: 50%;
+    display: none; /* JS điều khiển hiện/ẩn */
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 9999 !important; /* Đảm bảo luôn nổi trên các Card */
+    transition: all 300ms ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#back-to-top:hover {
+    background: #334155;
+    transform: translateY(-3px);
+}
+
+#back-to-top svg {
+    width: 20px;
+    height: 20px;
 }

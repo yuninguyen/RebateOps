@@ -39,14 +39,7 @@ class BrandResource extends Resource
                     ->live(onBlur: true)
                     ->afterStateUpdated(fn($state, $set) => $set('slug', \Str::slug($state))),
                 Forms\Components\Select::make('platform')
-                    ->options([
-                        'Rakuten' => 'Rakuten',
-                        'RetailMeNot' => 'RetailMeNot',
-                        'JoinHoney' => 'Join Honey',
-                        'Price' => 'Price.com',
-                        'TopCashback' => 'TopCashback',
-                        'ActiveJunky' => 'Active Junky',
-                    ])
+                    ->options(\App\Filament\Resources\Traits\HasPlatform::getPlatforms())
                     ->required(),
                 Forms\Components\TextInput::make('slug')
                     ->required()
@@ -83,15 +76,7 @@ class BrandResource extends Resource
                     ->label('Platform')
                     ->alignment(Alignment::Center)
                     ->searchable()
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
-                        'Rakuten' => 'Rakuten',
-                        'RetailMeNot' => 'RetailMeNot',
-                        'JoinHoney' => 'Join Honey',
-                        'Price' => 'Price.com',
-                        'TopCashback' => 'TopCashback',
-                        'ActiveJunky' => 'Active Junky',
-                        default => $state,
-                    }),
+                    ->formatStateUsing(fn(string $state): string => \App\Models\Platform::where('slug', $state)->value('name') ?? $state),
 
                 Tables\Columns\TextColumn::make('boost_percentage')
                     ->label('Boost')
@@ -123,14 +108,7 @@ class BrandResource extends Resource
                 // 1. LỌC THEO PLATFORM (Quan trọng nhất)
                 Tables\Filters\SelectFilter::make('platform')
                     ->label('Filter by Platform')
-                    ->options([
-                        'Rakuten' => 'Rakuten',
-                        'RetailMeNot' => 'RetailMeNot',
-                        'JoinHoney' => 'Join Honey',
-                        'Price' => 'Price.com',
-                        'TopCashback' => 'TopCashback',
-                        'ActiveJunky' => 'Active Junky',
-                    ])
+                    ->options(\App\Filament\Resources\Traits\HasPlatform::getPlatforms())
                     ->searchable(), // Cho phép gõ tìm platform nếu danh sách dài
 
                 // 2. LỌC THEO TRẠNG THÁI BOOST (Thẻ có thưởng vs Thẻ không thưởng)

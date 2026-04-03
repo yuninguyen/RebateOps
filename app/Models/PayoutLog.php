@@ -46,8 +46,14 @@ class PayoutLog extends Model
     ];
 
     protected $casts = [
-        'gc_code' => 'encrypted',
-        'gc_pin'  => 'encrypted',
+        'gc_code'          => 'encrypted',
+        'gc_pin'           => 'encrypted',
+        'amount_usd'       => 'decimal:2',
+        'fee_usd'          => 'decimal:2',
+        'net_amount_usd'   => 'decimal:2',
+        'boost_percentage' => 'decimal:2',
+        'exchange_rate'    => 'decimal:2',
+        'total_vnd'        => 'decimal:0',
     ];
 
     // Cấu hình theo dõi toàn bộ các cột được phép điền
