@@ -99,8 +99,8 @@ class EmailStatusChart extends ChartWidget
         // Phần tổng quan
         // Phần tổng quan - Dàn hàng ngang để tiết kiệm diện tích và cân bằng chiều cao với widget bên cạnh
         $html = "
-        <div class='mt-2' style='display: flex; flex-direction: column; gap: 8px;'>
-            <div style='display: flex; align-items: center; gap: 16px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;'>
+        <div class='es-widget-wrapper'>
+            <div class='es-header-row'>
                 <div style='font-size: 15px; color: #64748b; cursor: pointer; white-space: nowrap;' wire:click=\"onUserClicked(null)\">
                     Total Emails: <span style='color: #1e293b; font-weight: 800;'>{$total}</span>
                 </div>
@@ -154,15 +154,18 @@ class EmailStatusChart extends ChartWidget
                 $uDisabled = $data->disabled_count ?? 0;
 
                 $rows .= "
-                    <div style='display: grid; grid-template-columns: 20px 100px 1fr 1fr 1fr 1fr; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; border-radius: 6px;' wire:click=\"onUserClicked('{$name}')\" onmouseover=\"this.style.background='#f8fafc'\" onmouseout=\"this.style.background='transparent'\">
-                        <div style='width: 20px; height: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;'>
-                            <span style='font-size: 9px; font-weight: 700; color: white; line-height: 1;'>{$initial}</span>
+                    <div class='es-holder-row' wire:click=\"onUserClicked('{$name}')\">
+                        <div class='es-initials-circle'>
+                            <span class='es-initials-text'>{$initial}</span>
                         </div>
-                        <span style='font-size: 11px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{$name}</span>
-                        <span style='font-size: 10px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%; white-space: nowrap;'>Total: {$uTotal}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #4BC0C0; background: rgba(75,192,192,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%; white-space: nowrap;'>Live: {$uLive}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #FF6384; background: rgba(255,99,132,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%; white-space: nowrap;'>Locked: {$uLocked}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #FF9F40; background: rgba(255,159,64,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%; white-space: nowrap;'>Disabled: {$uDisabled}</span>
+                        <span class='es-name' style='font-size: 11px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{$name}</span>
+                        
+                        <div class='es-stats-group'>
+                            <span class='es-stat-badge' style='color: #475569; background: #f1f5f9;'>Total: {$uTotal}</span>
+                            <span class='es-stat-badge' style='color: #4BC0C0; background: rgba(75,192,192,0.1);'>Live: {$uLive}</span>
+                            <span class='es-stat-badge' style='color: #FF6384; background: rgba(255,99,132,0.1);'>Locked: {$uLocked}</span>
+                            <span class='es-stat-badge' style='color: #FF9F40; background: rgba(255,159,64,0.1);'>Disabled: {$uDisabled}</span>
+                        </div>
                     </div>
                 ";
             }
@@ -182,22 +185,25 @@ class EmailStatusChart extends ChartWidget
                 $uDisabled = max(0, $disabled - $assignedDisabled);
 
                 $rows .= "
-                    <div style='display: grid; grid-template-columns: 20px 100px 1fr 1fr 1fr 1fr; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid #f1f5f9; margin-top: 2px;'>
+                    <div class='es-holder-row' style='border-top: 1px solid #f1f5f9; margin-top: 2px; cursor: default; background: transparent !important;'>
                         <div style='width: 20px; height: 20px; background: #94a3b8; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;'>
                             <span style='font-size: 9px; font-weight: 700; color: white;'>?</span>
                         </div>
                         <span style='font-size: 11px; font-weight: 600; color: #64748b; font-style: italic;'>Unassigned</span>
-                        <span style='font-size: 10px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%;'>Total: {$unassignedTotal}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #4BC0C0; background: rgba(75,192,192,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%;'>Live: {$uLive}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #FF6384; background: rgba(255,99,132,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%;'>Locked: {$uLocked}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #FF9F40; background: rgba(255,159,64,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%;'>Disabled: {$uDisabled}</span>
+                        
+                        <div class='es-stats-group'>
+                            <span class='es-stat-badge' style='color: #475569; background: #f1f5f9;'>Total: {$unassignedTotal}</span>
+                            <span class='es-stat-badge' style='color: #4BC0C0; background: rgba(75,192,192,0.1);'>Live: {$uLive}</span>
+                            <span class='es-stat-badge' style='color: #FF6384; background: rgba(255,99,132,0.1);'>Locked: {$uLocked}</span>
+                            <span class='es-stat-badge' style='color: #FF9F40; background: rgba(255,159,64,0.1);'>Disabled: {$uDisabled}</span>
+                        </div>
                     </div>
                 ";
             }
 
             $html .= "
-                <div style='margin-top: 4px; padding-top: 2px;'>
-                    <div style='font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;'>Holders <span style='font-size: 8px; color: #cbd5e1;'>(click to filter)</span></div>
+                <div class='es-holders-container'>
+                    <div class='es-holder-label'>Holders <span style='font-size: 8px; color: #cbd5e1;'>(click to filter)</span></div>
                     {$rows}
                 </div>
             ";

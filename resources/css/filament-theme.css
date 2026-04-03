@@ -65,6 +65,35 @@
     box-sizing: border-box !important;
 }
 
+/* Triệt tiêu nút thu gọn Sidebar để có giao diện tối giản nhất */
+.fi-sidebar-collapse-button,
+.fi-sidebar-header button[x-on\:click*="sidebar"] {
+    display: none !important;
+}
+
+/* Đảm bảo Logo và Nhãn luôn rạng rỡ, loại trừ các nút chức năng đã ẩn */
+.fi-sidebar-header a span,
+.fi-sidebar-header a img,
+.fi-sidebar-header a svg,
+.fi-sidebar-header > span,
+.fi-sidebar-header > img,
+.fi-sidebar-header > svg,
+.fi-sidebar-group-label,
+.fi-sidebar-item-label {
+    display: inline-block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Đảm bảo Sidebar Desktop luôn rạng rỡ */
+@media (min-width: 1024px) {
+    .fi-sidebar {
+        width: var(--sidebar-width, 16rem) !important;
+        visibility: visible !important;
+        transform: none !important;
+    }
+}
+
 /* Brand name / logo */
 .fi-sidebar-header a,
 .fi-sidebar-header span {
@@ -148,25 +177,55 @@
    3. TOPBAR — Clean & Subtle
    ============================================ */
 .fi-topbar {
+    position: relative !important; /* Gỡ bỏ cố định topbar */
     background: var(--card-bg) !important;
     border-bottom: 1px solid var(--border-color) !important;
     box-shadow: none !important;
     box-sizing: border-box !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     max-width: 100% !important;
+    z-index: 10 !important;
 }
 
 .fi-topbar nav {
     height: 64px !important;
-    padding-top: 15px !important;
+    padding: 0 1.5rem !important;
+    display: flex !important;
+    align-items: center !important;
     box-sizing: border-box !important;
 }
 
-/* Hide sidebar toggle icon on topbar left */
-.fi-topbar .fi-sidebar-open-button,
-.fi-topbar [x-show],
-.fi-topbar nav>div:first-child button[x-on\:click] {
-    display: none !important;
+/* Sửa lỗi lệch Icon: Căn giữa hoàn hảo và thêm padding theo yêu cầu cụ thể */
+.fi-topbar nav > div:last-child {
+    display: flex !important;
+    align-items: center !important;
+    gap: 1rem !important;
+    padding-top: 15px !important;
+    padding-right: 5px !important;
+}
+
+/* Hiện menu icon ở góc trái trên Phone, ẩn trên Desktop */
+@media (min-width: 1024px) {
+    .fi-topbar .fi-sidebar-open-button,
+    .fi-topbar nav>div:first-child button[x-on\:click] {
+        display: none !important;
+    }
+}
+
+@media (max-width: 1023px) {
+    /* CHỈ áp dụng cho nút Menu (Sidebar toggle) ở bên trái */
+    .fi-topbar nav > button:first-of-type,
+    .fi-topbar nav > div:first-child button {
+        padding-top: 15px !important;
+        padding-left: 5px !important;
+        display: flex !important;
+    }
+
+    /* Đảm bảo các nút khác (như Chuông) không bị dính padding này */
+    .fi-topbar nav > div:last-child button {
+        padding-top: 0 !important;
+        padding-left: 0 !important;
+    }
 }
 
 /* Fix border overflow — clip right edge */
@@ -176,7 +235,8 @@
 
 .fi-topbar,
 .fi-topbar nav {
-    overflow: hidden !important;
+    /* overflow: hidden !important; // Removed to let dropdowns and spacing work naturally */
+    overflow: visible !important;
 }
 
 /* ============================================
@@ -184,10 +244,10 @@
    ============================================ */
 .fi-main {
     background: var(--content-bg) !important;
-    padding-left: 1rem !important;
-    padding-right: 1.25rem !important;
+    padding-left: 1.5rem !important; /* Tăng từ 1rem lên 1.5rem cho thoáng */
+    padding-right: 1.5rem !important; /* Đồng bộ lề phải */
     box-sizing: border-box !important;
-    overflow-x: hidden !important;
+    /* overflow-x: hidden !important; // Removed to prevent clipping dropdowns */
 }
 
 .fi-main-ctn {
@@ -195,7 +255,7 @@
     width: 100% !important;
     flex: 1;
     box-sizing: border-box !important;
-    overflow-x: hidden !important;
+    /* overflow-x: hidden !important; // Removed to prevent clipping dropdowns */
 }
 
 /* ============================================
@@ -222,6 +282,49 @@
 .fi-layout,
 .fi-body {
     max-width: 100% !important;
+}
+
+/* 🟢 FIX CUỘN TRANG TRÊN MOBILE: Khôi phục cơ chế cuộn toàn trang (Global Scroll) 
+   Chỉ áp dụng cho Phone/Tablet để không ảnh hưởng đến Desktop */
+@media (max-width: 1023px) {
+    html {
+        height: auto !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        scroll-behavior: smooth;
+    }
+
+    body {
+        height: auto !important;
+        min-height: 100vh;
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+    }
+
+    .fi-layout {
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow: visible !important;
+    }
+
+    .fi-main,
+    .fi-main-ctn {
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow: visible !important;
+    }
+
+    /* Đảm bảo Sidebar Mobile luôn nằm trên cùng tuyệt đối khi mở */
+    .fi-sidebar {
+        z-index: 10000 !important;
+    }
+
+    /* Đảm bảo lớp nền mờ che phủ hoàn toàn các thành phần trang (filters, widgets) */
+    .fi-sidebar-close-overlay {
+        z-index: 9998 !important;
+        background-color: rgba(0, 0, 0, 0.45) !important;
+        backdrop-filter: blur(4px) !important;
+    }
 }
 
 /* Content inner wrapper */
@@ -580,6 +683,13 @@ textarea.fi-input {
     border: none !important;
     background: var(--card-bg) !important;
     box-shadow: none !important;
+    z-index: 50 !important; /* Ensure dropdowns are above table content */
+}
+
+/* Ensure filter bar container doesn't clip children */
+.fi-ta-header-toolbar {
+    overflow: visible !important;
+    z-index: 40 !important;
 }
 
 /* ============================================
@@ -632,11 +742,13 @@ textarea.fi-input {
     font-weight: 700 !important;
     letter-spacing: -0.02em !important;
     color: var(--text-primary) !important;
+    padding-left: 0.5rem !important; /* Thêm padding-left cho lời chào */
 }
 
 .fi-header-subheading {
     font-size: 14px !important;
     color: var(--text-secondary) !important;
+    padding-left: 0.5rem !important; /* Thêm padding-left cho subheading */
 }
 
 /* ============================================
@@ -744,4 +856,183 @@ textarea.fi-input {
 }
 .fi-wi-stats-overview .fi-wi-stats-overview-stat-content {
     width: 100%;
+}
+
+/* ============================================
+   26. BACK TO TOP BUTTON
+   ============================================ */
+#back-to-top {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    z-index: 100;
+    width: 40px;
+    height: 40px;
+    background: #1E293B;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255,255,255,0.1);
+    opacity: 0.8;
+    display: none; /* Ẩn mặc định, hiện bằng JS */
+}
+
+#back-to-top:hover {
+    background: var(--accent-amber);
+    transform: translateY(-3px);
+    opacity: 1;
+}
+
+#back-to-top svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* ============================================
+   27. EMAIL STATUS CHART RESPONSIVE (ES-)
+   ============================================ */
+.es-widget-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.es-header-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 8px;
+    flex-wrap: wrap; /* Cho phép rớt hàng trên Mobile */
+}
+
+/* Container cho danh sách Holders */
+.es-holders-container {
+    margin-top: 4px;
+    padding-top: 2px;
+}
+
+.es-holder-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+}
+
+/* Từng hàng Holder */
+.es-holder-row {
+    display: grid !important;
+    grid-template-columns: 20px 100px 1fr 1fr 1fr 1fr; /* Desktop default */
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 6px 0 !important;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+}
+
+.es-holder-row:hover {
+    background-color: #f8fafc;
+}
+
+/* Nhóm các chỉ số (Stats) để điều khiển gom nhóm trên mobile */
+.es-stats-group {
+    display: contents; /* Trên desktop coi như không có div bọc này */
+}
+
+/* Badge chỉ số chung */
+.es-stat-badge {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    padding: 2px 4px !important;
+    border-radius: 4px !important;
+    text-align: center !important;
+    width: 100% !important;
+}
+
+/* Avatar/Initials */
+.es-initials-circle {
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.es-initials-text {
+    font-size: 9px;
+    font-weight: 700;
+    color: white;
+    line-height: 1;
+}
+
+/* ============================================
+   RESPONSIVE OVERRIDES (MOBILE)
+   ============================================ */
+@media (max-width: 640px) {
+    .es-header-row {
+        gap: 8px;
+    }
+    
+    .es-holder-row {
+        grid-template-columns: 24px 1fr !important; /* Mobile: Avatar | Tên */
+        gap: 4px 8px !important;
+        padding: 8px 4px !important;
+        border-bottom: 1px dotted #f1f5f9;
+        height: auto !important;
+    }
+    
+    .es-stats-group {
+        display: grid !important; /* Hiện lại div bọc */
+        grid-column: 1 / -1; /* Chiếm toàn bộ chiều ngang hàng dưới */
+        grid-template-columns: repeat(2, 1fr) !important; /* Chia 2x2 */
+        gap: 4px !important;
+        margin-top: 2px;
+    }
+
+    .es-stat-badge {
+        font-size: 9px !important;
+        padding: 4px 2px !important;
+    }
+}
+
+/* 🟢 NÚT BACK TO TOP - HOÀN THIỆN */
+#back-to-top {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 44px;
+    height: 44px;
+    background: #1e293b;
+    color: white;
+    border-radius: 50%;
+    display: none; /* JS điều khiển hiện/ẩn */
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 9999 !important; /* Đảm bảo luôn nổi trên các Card */
+    transition: all 300ms ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#back-to-top:hover {
+    background: #334155;
+    transform: translateY(-3px);
+}
+
+#back-to-top svg {
+    width: 20px;
+    height: 20px;
 }

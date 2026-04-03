@@ -1282,6 +1282,13 @@ class PayoutLogResource extends Resource
                                 ->placeholder('Eg: 20000')
                                 ->numeric()
                                 ->helperText('💡 Enter the rate YOU WANT TO PAY the user. If left blank, it will default to the Market Rate (0 profit).'),
+                            
+                            Forms\Components\TextInput::make('payout_percentage')
+                                ->label('Payout Percentage (%)')
+                                ->placeholder('Eg: 35')
+                                ->numeric()
+                                ->default(100)
+                                ->helperText('💡 Percentage of the total value to pay the user (e.g. 35% of USD * Rate).'),
                         ])
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data) {
 
@@ -1363,9 +1370,12 @@ class PayoutLogResource extends Resource
                                 
                                 // Lấy tỷ giá trả user từ form (nếu không nhập thì lấy bằng tỷ giá thị trường)
                                 $payoutRate = (float) ($data['manual_payout_rate'] ?? $averageMarketRate);
-                                $totalVndPayout = floor($totalUsd * $payoutRate);
+                                $payoutPercentage = (float) ($data['payout_percentage'] ?? 100);
+
+                                // Tiền thực trả = (Số lượng USD * Tỷ giá chi trả) * (% chi trả / 100)
+                                $totalVndPayout = floor(($totalUsd * $payoutRate) * ($payoutPercentage / 100));
                                 
-                                // Lợi nhuận = Tiền thực nhận về - Tiền trả User
+                                // Lợi nhuận = Tiền thực nhận về - Tiền thực trả cho User
                                 $profitVnd = $totalVndMarket - $totalVndPayout;
 
                                 // 4. TẠO PHIẾU LƯƠNG
@@ -1376,6 +1386,7 @@ class PayoutLogResource extends Resource
                                     'total_usd' => $totalUsd,
                                     'exchange_rate' => $averageMarketRate, // Lưu Market Rate để đối soát
                                     'payout_rate' => $payoutRate,        // Lưu Payout Rate
+                                    'payout_percentage' => $payoutPercentage, // Lưu tỷ lệ chi trả
                                     'total_vnd' => $totalVndPayout,      // Số tiền thực trả User
                                     'profit_vnd' => $profitVnd,          // Số tiền lãi
                                     'status' => 'pending',

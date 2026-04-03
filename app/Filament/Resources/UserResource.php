@@ -12,6 +12,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Support\Enums\Alignment;
 
 class UserResource extends Resource
 {
@@ -86,15 +87,17 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('name')
                     ->label('Name')
                     ->searchable()
-                    ->sortable(),
+                    ->alignment(Alignment::Center),
 
                 Tables\Columns\TextColumn::make('username')
                     ->label('Username')
-                    ->searchable(),
+                    ->searchable()
+                    ->alignment(Alignment::Center),
                 Tables\Columns\TextColumn::make('email')
                     ->label('Email Address')
                     ->copyable() // Cho phép click để copy nhanh email
-                    ->searchable(),
+                    ->searchable()
+                    ->alignment(Alignment::Center),
                 Tables\Columns\TextColumn::make('role')
                     ->label('Role')
                     ->formatStateUsing(fn(string $state): string => match ($state) {
@@ -102,7 +105,7 @@ class UserResource extends Resource
                         'staff' => 'Staff',
                         default => $state,
                     })
-                    ->sortable(),
+                    ->alignment(Alignment::Center),
             ])
             ->filters([
                 //

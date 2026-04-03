@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\UserPaymentResource\Pages;
 use App\Filament\Resources\UserPaymentResource\RelationManagers;
 use App\Models\UserPayment;
+use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -14,6 +15,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Support\Enums\Alignment;
 use Illuminate\Database\Eloquent\Model;
+use App\Filament\Resources\Traits\HasPlatform;
+use Filament\Tables\Enums\FiltersLayout;
 
 
 class UserPaymentResource extends Resource
@@ -42,7 +45,10 @@ class UserPaymentResource extends Resource
     // 🟢 1. PHÂN QUYỀN DỮ LIỆU: Staff chỉ thấy lương của mình
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->latest(); // Xếp phiếu mới nhất lên đầu
+        // 🟢 Sắp xếp: Pending (desc) lên trên, sau đó mới đến Paid. Tiếp theo là Created At (desc)
+        $query = parent::getEloquentQuery()
+            ->orderBy('status', 'desc')
+            ->orderBy('created_at', 'desc');
 
         // Nếu không phải Admin, ép query chỉ tìm user_id của chính người đó
         if (!auth()->user()?->isAdmin()) {
@@ -116,7 +122,7 @@ class UserPaymentResource extends Resource
 
                 Tables\Columns\TextColumn::make('transaction_type')
                     ->label('Transaction Type')
-                    ->description(fn($record) => 'Market Rate: ' . number_format($record->exchange_rate) . ' | Payout: ' . number_format($record->payout_rate)) // Hiện cả 2 Rate
+                    ->description(fn($record) => 'Market: ' . number_format($record->exchange_rate) . ' | Payout: ' . number_format($record->payout_rate) . ' (' . ($record->payout_percentage ?? 100) . '%)')
                     ->searchable()
                     ->alignment(Alignment::Center),
 
@@ -170,13 +176,48 @@ class UserPaymentResource extends Resource
             ])
             ->defaultGroup('transaction_type')
             ->filters([
-                // Bộ lọc trạng thái
+                // 1. Lọc theo Platform (Sàn) — CHỈ HIỆN SÀN CÓ DỮ LIỆU THỰC TẾ
+                Tables\Filters\SelectFilter::make('platform')
+                    ->label('Platform')
+                    ->options(fn() => UserPayment::query()->distinct()->whereNotNull('platform')->pluck('platform', 'platform'))
+                    ->multiple(),
+
+                // 2. Lọc theo User (Nhân viên) — CHỈ HIỆN USER CÓ DỮ LIỆU THỰC TẾ
+                Tables\Filters\SelectFilter::make('user_id')
+                    ->label('User')
+                    ->options(fn() => User::whereIn('id', UserPayment::query()->distinct()->pluck('user_id'))->pluck('name', 'id'))
+                    ->searchable()
+                    ->preload()
+                    ->visible(fn() => auth()->user()?->isAdmin()),
+
+                // 3. Lọc theo Trạng thái
                 Tables\Filters\SelectFilter::make('status')
+                    ->label('Status')
                     ->options([
                         'pending' => 'Pending',
                         'paid' => 'Paid',
                     ]),
+
+                // 4. Lọc TỪ NGÀY
+                Tables\Filters\Filter::make('created_from')
+                    ->form([
+                        Forms\Components\DatePicker::make('from')
+                            ->label('From Date'),
+                    ])
+                    ->query(fn(Builder $query, array $data): Builder => $query->when($data['from'], fn(Builder $query, $date): Builder => $query->whereDate('created_at', '>=', $date)))
+                    ->indicateUsing(fn(array $data): array => ($data['from'] ?? null) ? ['From ' . \Carbon\Carbon::parse($data['from'])->format('d/m/Y')] : []),
+
+                // 5. Lọc ĐẾN NGÀY
+                Tables\Filters\Filter::make('created_until')
+                    ->form([
+                        Forms\Components\DatePicker::make('until')
+                            ->label('To Date'),
+                    ])
+                    ->query(fn(Builder $query, array $data): Builder => $query->when($data['until'], fn(Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date)))
+                    ->indicateUsing(fn(array $data): array => ($data['until'] ?? null) ? ['Until ' . \Carbon\Carbon::parse($data['until'])->format('d/m/Y')] : []),
             ])
+            ->filtersFormColumns(auth()->user()?->isAdmin() ? 5 : 4)
+            ->filtersLayout(FiltersLayout::AboveContent)
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->label(fn() => auth()->user()?->isAdmin() ? 'Up Bill' : 'View Bill'),

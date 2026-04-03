@@ -73,15 +73,35 @@ class AccountPlatformChart extends ChartWidget
         }
         $totalAccounts = (clone $query)->count();
 
-        // Phần tổng quan
+        // Lấy số liệu tổng quan hệ thống để hiển thị ở header (giúp cân bằng chiều cao với widget bên cạnh)
+        $totalGlobalLive = (clone $query)->where(function($q) {
+            $q->whereJsonContains('status', 'active')->orWhereJsonContains('status', 'used');
+        })->count();
+        $totalGlobalBanned = (clone $query)->whereJsonContains('status', 'banned')->count();
+
+        // 1. Phần tổng quan Header
         $html = "
-            <div class='mt-2 space-y-3'>
-                <div style='font-size: 15px; color: #64748b; letter-spacing: -0.01em; cursor: pointer;' wire:click=\"onUserClicked(null)\">
-                    Total Accounts: <span style='color: #1e293b; font-weight: 700;'>{$totalAccounts}</span>
+        <div class='es-widget-wrapper'>
+            <div class='es-header-row'>
+                <div style='font-size: 15px; color: #64748b; cursor: pointer; white-space: nowrap;' wire:click=\"onUserClicked(null)\">
+                    Total Accounts: <span style='color: #1e293b; font-weight: 800;'>{$totalAccounts}</span>
                 </div>
+                
+                <div style='display: flex; align-items: center; gap: 10px; font-size: 13px; text-transform: uppercase;'>
+                    <div style='display: flex; align-items: center; gap: 4px;'>
+                        <div style='width: 7px; height: 7px; background: #4BC0C0; border-radius: 50%;'></div>
+                        <span style='font-weight: 700; color: #4BC0C0;'>Live: <span style='color: #1e293b;'>{$totalGlobalLive}</span></span>
+                    </div>
+                    <span style='color: #cbd5e1;'>|</span>
+                    <div style='display: flex; align-items: center; gap: 4px;'>
+                        <div style='width: 7px; height: 7px; background: #FF6384; border-radius: 50%;'></div>
+                        <span style='font-weight: 700; color: #FF6384;'>Banned: <span style='color: #1e293b;'>{$totalGlobalBanned}</span></span>
+                    </div>
+                </div>
+            </div>
         ";
 
-        // Chi tiết User breakdown (chỉ Admin)
+        // 2. Chi tiết User breakdown (chỉ Admin — clickable)
         if ($isAdmin) {
             $allUsers = User::orderBy('name')->get();
 
@@ -107,14 +127,18 @@ class AccountPlatformChart extends ChartWidget
                 $uBanned = $data->banned_count ?? 0;
 
                 $rows .= "
-                    <div style='display: grid; grid-template-columns: 20px 100px 1fr 1fr 1fr; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; border-radius: 6px;' wire:click=\"onUserClicked('{$name}')\" onmouseover=\"this.style.background='#f8fafc'\" onmouseout=\"this.style.background='transparent'\">
-                        <div style='width: 20px; height: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;'>
-                            <span style='font-size: 9px; font-weight: 700; color: white; line-height: 1;'>{$initial}</span>
+                    <div class='es-holder-row' wire:click=\"onUserClicked('{$name}')\">
+                        <div class='es-initials-circle'>
+                            <span class='es-initials-text'>{$initial}</span>
                         </div>
-                        <span style='font-size: 11px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{$name}</span>
-                        <span style='font-size: 10px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%; white-space: nowrap;'>Total: {$uTotal}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #4BC0C0; background: rgba(75,192,192,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%; white-space: nowrap;'>Live: {$uLive}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #FF6384; background: rgba(255,99,132,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%; white-space: nowrap;'>Banned: {$uBanned}</span>
+                        <span class='es-name' style='font-size: 11px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{$name}</span>
+                        
+                        <div class='es-stats-group'>
+                            <span class='es-stat-badge' style='color: #475569; background: #f1f5f9;'>Total: {$uTotal}</span>
+                            <span class='es-stat-badge' style='color: #4BC0C0; background: rgba(75,192,192,0.1);'>Live: {$uLive}</span>
+                            <span class='es-stat-badge' style='color: #FF6384; background: rgba(255,99,132,0.1);'>Banned: {$uBanned}</span>
+                            <span class='es-stat-badge' style='visibility: hidden;'>-</span> <!-- Giữ chỗ để cân bằng grid 4 cột stats -->
+                        </div>
                     </div>
                 ";
             }
@@ -127,31 +151,29 @@ class AccountPlatformChart extends ChartWidget
             $unassignedTotal = max(0, $totalAccounts - $assignedTotal);
             
             if ($unassignedTotal > 0) {
-                // Đảm bảo số liệu cộng lại luôn chuẩn xác 100% bằng phép trừ
-                $totalGlobalLive = (clone $query)->where(function($q) {
-                    $q->whereJsonContains('status', 'active')->orWhereJsonContains('status', 'used');
-                })->count();
-                $totalGlobalBanned = (clone $query)->whereJsonContains('status', 'banned')->count();
-
                 $uLive = max(0, $totalGlobalLive - $assignedLive);
                 $uBanned = max(0, $totalGlobalBanned - $assignedBanned);
 
                 $rows .= "
-                    <div style='display: grid; grid-template-columns: 20px 100px 1fr 1fr 1fr; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid #f1f5f9; margin-top: 2px;'>
+                    <div class='es-holder-row' style='border-top: 1px solid #f1f5f9; margin-top: 2px; cursor: default; background: transparent !important;'>
                         <div style='width: 20px; height: 20px; background: #94a3b8; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;'>
                             <span style='font-size: 9px; font-weight: 700; color: white;'>?</span>
                         </div>
                         <span style='font-size: 11px; font-weight: 600; color: #64748b; font-style: italic;'>Unassigned</span>
-                        <span style='font-size: 10px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%;'>Total: {$unassignedTotal}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #4BC0C0; background: rgba(75,192,192,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%;'>Live: {$uLive}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #FF6384; background: rgba(255,99,132,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%;'>Banned: {$uBanned}</span>
+                        
+                        <div class='es-stats-group'>
+                            <span class='es-stat-badge' style='color: #475569; background: #f1f5f9;'>Total: {$unassignedTotal}</span>
+                            <span class='es-stat-badge' style='color: #4BC0C0; background: rgba(75,192,192,0.1);'>Live: {$uLive}</span>
+                            <span class='es-stat-badge' style='color: #FF6384; background: rgba(255,99,132,0.1);'>Banned: {$uBanned}</span>
+                            <span class='es-stat-badge' style='visibility: hidden;'>-</span>
+                        </div>
                     </div>
                 ";
             }
 
             $html .= "
-                <div style='margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0;'>
-                    <div style='font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;'>Holders <span style='font-size: 8px; color: #cbd5e1;'>(click to filter)</span></div>
+                <div class='es-holders-container'>
+                    <div class='es-holder-label'>Holders <span style='font-size: 8px; color: #cbd5e1;'>(click to filter)</span></div>
                     {$rows}
                 </div>
             ";
