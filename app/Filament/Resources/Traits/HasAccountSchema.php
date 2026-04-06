@@ -528,7 +528,8 @@ trait HasAccountSchema
                     ->color(fn(Account $record) => $record->user_id === null ? 'gray' : 'default')
                     ->html()
                     ->description(function (Account $record): ?\Illuminate\Support\HtmlString {
-                        if ($record->user_id === null && !auth()->user()?->isFinance()) {
+                        $user = auth()->user();
+                        if ($record->user_id === null && !$user?->isFinance()) {
                             return new \Illuminate\Support\HtmlString(
                                 '<span class = "get-account-btn">' . __('system.get_account') . '</span>'
                             );
@@ -536,8 +537,9 @@ trait HasAccountSchema
                         return null;
                     })
                     ->extraAttributes(function (Account $record) {
+                        $user = auth()->user();
                         $styles = 'font-weight: 400 !important; line-height: 1.2;';
-                        if ($record->user_id === null && !auth()->user()?->isFinance()) {
+                        if ($record->user_id === null && !$user?->isFinance()) {
                             return [
                                 'class' => 'cursor-pointer transition hover:opacity-70',
                                 'wire:click.stop' => "mountTableAction('get_account', '{$record->id}')",

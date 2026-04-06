@@ -164,7 +164,7 @@ class AdminUserEarningsTable extends BaseWidget
                             ->label(__('system.labels.until'))
                             ->live(),
                     ])
-                    ->columns((auth()->user()?->isAdmin() || auth()->user()?->isFinance()) ? 3 : 2)
+                    ->columns(in_array(auth()->user()?->role, ['admin', 'finance']) ? 3 : 2)
                     ->columnSpanFull(),
             ], layout: Tables\Enums\FiltersLayout::AboveContent);
     }
