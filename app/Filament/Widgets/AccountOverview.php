@@ -10,18 +10,27 @@ use Illuminate\Support\Facades\DB;
 
 class AccountOverview extends BaseWidget
 {
-    protected int | string | array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 'full';
+    
+    public static function canView(): bool
+    {
+        return !auth()->user()?->isFinance();
+    }
 
     protected function getStats(): array
     {
         $stats = [];
         $isAdmin = auth()->user()?->isAdmin();
 
+        $lblLive = __('system.status.live');
+        $lblBanned = __('system.status.banned');
+        $lblAvailable = __('system.unassigned');
+
+        // Lấy bản đồ slug => name để hiển thị tên đẹp thay vì slug
+        $platformNames = \App\Models\Platform::pluck('name', 'slug')->toArray();
+
         // Trình dựng Giao diện (HTML) cho phần tổng quan Live/Banned/Unassigned
-        $buildSummaryHtml = function ($active, $banned, $available) {
-            $lblLive = __('system.status.live');
-            $lblBanned = __('system.status.banned');
-            $lblAvailable = __('system.unassigned');
+        $buildSummaryHtml = function ($active, $banned, $available) use ($lblLive, $lblBanned, $lblAvailable) {
 
             return "
                 <div style='display: flex; gap: 12px; align-items: center; margin-top: 8px;'>
@@ -57,7 +66,7 @@ class AccountOverview extends BaseWidget
         };
 
         // Trình dựng HTML chi tiết theo từng User — hiển thị TẤT CẢ user
-        $buildUserDetailHtml = function ($allUsers, $dataMap, $unassignedData = null) {
+        $buildUserDetailHtml = function ($allUsers, $dataMap, $unassignedData = null) use ($lblAvailable) {
             $rows = '';
             foreach ($allUsers as $user) {
                 $name = e($user->name);
@@ -68,14 +77,14 @@ class AccountOverview extends BaseWidget
                 $banned = $data->banned_count ?? 0;
 
                 $rows .= "
-                    <div style='display: grid; grid-template-columns: 20px 100px 1fr 1fr 1fr; align-items: center; gap: 8px; padding: 4px 0;'>
-                        <div style='width: 20px; height: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;'>
-                            <span style='font-size: 9px; font-weight: 700; color: white; line-height: 1;'>{$initial}</span>
+                    <div style='display: grid; grid-template-columns: 24px 90px 1fr 1fr 1fr; align-items: center; gap: 10px; padding: 5px 0;'>
+                        <div style='width: 24px; height: 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;'>
+                            <span style='font-size: 10px; font-weight: 700; color: white; line-height: 1;'>{$initial}</span>
                         </div>
-                        <span style='font-size: 11px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{$name}</span>
-                        <span style='font-size: 10px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%; white-space: nowrap;'>Total: {$total}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #4BC0C0; background: rgba(75,192,192,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%; white-space: nowrap;'>Live: {$live}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #FF6384; background: rgba(255,99,132,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%; white-space: nowrap;'>Banned: {$banned}</span>
+                        <span style='font-size: 12px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{$name}</span>
+                        <span style='font-size: 10px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 3px 6px; border-radius: 6px; text-align: center; white-space: nowrap;'>" . __('system.master_account_claim.total') . ": {$total}</span>
+                        <span style='font-size: 10px; font-weight: 600; color: #4BC0C0; background: rgba(75,192,192,0.1); padding: 3px 6px; border-radius: 6px; text-align: center; white-space: nowrap;'>" . __('system.status.live') . ": {$live}</span>
+                        <span style='font-size: 10px; font-weight: 600; color: #FF6384; background: rgba(255,99,132,0.1); padding: 3px 6px; border-radius: 6px; text-align: center; white-space: nowrap;'>" . __('system.status.banned') . ": {$banned}</span>
                     </div>
                 ";
             }
@@ -83,21 +92,21 @@ class AccountOverview extends BaseWidget
             // Thêm hàng Unassigned nếu có
             if ($unassignedData && $unassignedData['total'] > 0) {
                 $rows .= "
-                    <div style='display: grid; grid-template-columns: 20px 100px 1fr 1fr 1fr; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid #f1f5f9; margin-top: 2px;'>
-                        <div style='width: 20px; height: 20px; background: #94a3b8; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;'>
-                            <span style='font-size: 9px; font-weight: 700; color: white;'>?</span>
+                    <div style='display: grid; grid-template-columns: 24px 90px 1fr 1fr 1fr; align-items: center; gap: 10px; padding: 5px 0; border-top: 1px solid #f1f5f9; margin-top: 2px;'>
+                        <div style='width: 24px; height: 24px; background: #94a3b8; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;'>
+                            <span style='font-size: 10px; font-weight: 700; color: white;'>?</span>
                         </div>
-                        <span style='font-size: 11px; font-weight: 600; color: #64748b; font-style: italic;'>Unassigned</span>
-                        <span style='font-size: 10px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%;'>Total: {$unassignedData['total']}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #4BC0C0; background: rgba(75,192,192,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%;'>Live: {$unassignedData['live']}</span>
-                        <span style='font-size: 10px; font-weight: 600; color: #FF6384; background: rgba(255,99,132,0.1); padding: 1px 4px; border-radius: 4px; text-align: center; width: 100%;'>Banned: {$unassignedData['banned']}</span>
+                        <span style='font-size: 12px; font-weight: 600; color: #64748b; font-style: italic;'>{$lblAvailable}</span>
+                        <span style='font-size: 10px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 3px 6px; border-radius: 6px; text-align: center; white-space: nowrap;'>" . __('system.master_account_claim.total') . ": {$unassignedData['total']}</span>
+                        <span style='font-size: 10px; font-weight: 600; color: #4BC0C0; background: rgba(75,192,192,0.1); padding: 3px 6px; border-radius: 6px; text-align: center; white-space: nowrap;'>" . __('system.status.live') . ": {$unassignedData['live']}</span>
+                        <span style='font-size: 10px; font-weight: 600; color: #FF6384; background: rgba(255,99,132,0.1); padding: 3px 6px; border-radius: 6px; text-align: center; white-space: nowrap;'>" . __('system.status.banned') . ": {$unassignedData['banned']}</span>
                     </div>
                 ";
             }
 
             return "
                 <div style='margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0;'>
-                    <div style='font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;'>Holders</div>
+                    <div style='font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;'>" . __('system.charts.holders') . "</div>
                     {$rows}
                 </div>
             ";
@@ -108,7 +117,7 @@ class AccountOverview extends BaseWidget
         $countGlobalStats = function ($baseQuery) {
             $totalLive = (clone $baseQuery)->where(function ($q) {
                 $q->whereJsonContains('status', 'active')
-                  ->orWhereJsonContains('status', 'used');
+                    ->orWhereJsonContains('status', 'used');
             })->count();
             $totalBanned = (clone $baseQuery)->whereJsonContains('status', 'banned')->count();
             $totalUnassigned = (clone $baseQuery)->whereNull('user_id')->count();
@@ -131,8 +140,8 @@ class AccountOverview extends BaseWidget
             ->orderBy('users.name')
             ->get();
 
-        // Lấy TẤT CẢ users
-        $allUsers = User::orderBy('name')->get();
+        // Lấy TẤT CẢ users (ngoại trừ Finance vì họ không vận hành)
+        $allUsers = User::whereNot('role', 'finance')->orderBy('name')->get();
 
         // Lấy danh sách tất cả các nền tảng hiện có
         $platforms = Account::select('platform')
@@ -140,7 +149,7 @@ class AccountOverview extends BaseWidget
             ->whereNotNull('platform')
             ->pluck('platform');
 
-        // === THẺ ĐẦU TIÊN: ALL PLATFORMS (GLOBAL) ===
+        // === THẺ ĐẦU TIÊN: ALL PLATFORMS ===
         $totalSystem = Account::count();
 
         if ($isAdmin) {
@@ -168,14 +177,33 @@ class AccountOverview extends BaseWidget
             ]);
         } else {
             // Staff: hiển thị số liệu cá nhân
-            $myTotal = Account::where('user_id', auth()->id())->count();
-            $myBanned = Account::where('user_id', auth()->id())->whereJsonContains('status', 'banned')->count();
-            $myActive = $myTotal - $myBanned;
-            $totalUnassigned = Account::whereNull('user_id')->count();
-            $globalHtml = $buildSummaryHtml($myActive, $myBanned, $totalUnassigned);
+            $userId = auth()->id();
+            $user = auth()->user();
+
+            // Lấy số liệu cá nhân và số liệu unassigned toàn hệ thống
+            [$myLive, $myBanned, $ignore] = $countGlobalStats(Account::where('user_id', $userId));
+            [$sysLive, $sysBanned, $totalUnassigned] = $countGlobalStats(Account::query());
+
+            $globalHtml = $buildSummaryHtml($myLive, $myBanned, $totalUnassigned);
+
+            // Chỉ liệt kê chính user này bên dưới giống Admin
+            $personalDataMap = collect([
+                $userId => (object)[
+                    'total_count' => Account::where('user_id', $userId)->count(),
+                    'live_count' => $myLive,
+                    'banned_count' => $myBanned,
+                ]
+            ]);
+
+            // Hiển thị row chi tiết của mình + box unassigned (nếu có)
+            $globalHtml .= $buildUserDetailHtml([$user], $personalDataMap, [
+                'total' => $totalUnassigned,
+                'live' => Account::whereNull('user_id')->where(fn($q) => $q->whereJsonContains('status', 'active')->orWhereJsonContains('status', 'used'))->count(),
+                'banned' => Account::whereNull('user_id')->whereJsonContains('status', 'banned')->count(),
+            ]);
         }
 
-        $stats[] = Stat::make('ALL PLATFORMS (GLOBAL)', $totalSystem)
+        $stats[] = Stat::make(__('system.total_accounts'), $totalSystem)
             ->description(new \Illuminate\Support\HtmlString($globalHtml))
             ->color('gray');
 
@@ -199,16 +227,34 @@ class AccountOverview extends BaseWidget
                     'banned' => max(0, $platformBanned - $platformDataMap->sum('banned_count'))
                 ]);
             } else {
-                // Staff: hiển thị số liệu cá nhân
-                $available = (clone $query)->whereNull('user_id')->count();
-                $myQuery = (clone $query)->where('user_id', auth()->id());
-                $myTotal = (clone $myQuery)->count();
-                $myBanned = (clone $myQuery)->whereJsonContains('status', 'banned')->count();
-                $myActive = $myTotal - $myBanned;
-                $platformHtml = $buildSummaryHtml($myActive, $myBanned, $available);
+                // Staff: hiển thị số liệu cá nhân cho platform này
+                $userId = auth()->id();
+                $user = auth()->user();
+
+                [$myLive, $myBanned, $ignore] = $countGlobalStats(Account::where('platform', $platform)->where('user_id', $userId));
+                [$pltLive, $pltBanned, $available] = $countGlobalStats(clone $query);
+
+                $platformHtml = $buildSummaryHtml($myLive, $myBanned, $available);
+
+                // Chi tiết cá nhân
+                $personalPltDataMap = collect([
+                    $userId => (object)[
+                        'total_count' => Account::where('platform', $platform)->where('user_id', $userId)->count(),
+                        'live_count' => $myLive,
+                        'banned_count' => $myBanned,
+                    ]
+                ]);
+
+                $platformHtml .= $buildUserDetailHtml([$user], $personalPltDataMap, [
+                    'total' => $available,
+                    'live' => Account::where('platform', $platform)->whereNull('user_id')->where(fn($q) => $q->whereJsonContains('status', 'active')->orWhereJsonContains('status', 'used'))->count(),
+                    'banned' => Account::where('platform', $platform)->whereNull('user_id')->whereJsonContains('status', 'banned')->count(),
+                ]);
             }
 
-            $stats[] = Stat::make($platform, $total)
+            $displayName = $platformNames[$platform] ?? $platform;
+
+            $stats[] = Stat::make(strtoupper($displayName), $total)
                 ->description(new \Illuminate\Support\HtmlString($platformHtml))
                 ->color('primary');
         }
@@ -216,4 +262,4 @@ class AccountOverview extends BaseWidget
         return $stats;
     }
 }
-
+

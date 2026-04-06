@@ -151,11 +151,11 @@
                 </div>
             @endif
         </div>
-        Sign in to your account
+        {{ __('system.auth.login_title') }}
     </x-slot>
 
     <x-slot name="subheading">
-        Enter your credentials to access the dashboard
+        {{ __('system.auth.login_subtitle') }}
     </x-slot>
 
     {{-- Filament form + action buttons rendered by Livewire --}}

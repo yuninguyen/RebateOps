@@ -7,7 +7,7 @@ use Filament\Pages\Dashboard as BaseDashboard;
 
 class Dashboard extends BaseDashboard
 {
-    public function getColumns(): int | string | array
+    public function getColumns(): int|string|array
     {
         return 2;
     }
@@ -17,36 +17,41 @@ class Dashboard extends BaseDashboard
     {
         $hour = (int) now()->format('H');
         $greeting = match (true) {
-            $hour < 12 => 'Good morning',
-            $hour < 18 => 'Good afternoon',
-            default    => 'Good evening',
+            $hour < 12 => __('system.greetings.morning'),
+            $hour < 18 => __('system.greetings.afternoon'),
+            default => __('system.greetings.evening'),
         };
 
-        $name = auth()->user()?->name ?? 'there';
+        $name = auth()->user()?->name ?? __('system.n/a');
 
         return "{$greeting}, {$name} 👋";
     }
 
     public function getSubheading(): ?string
     {
-        return 'Here\'s your operations overview for today.';
+        return __('system.greetings.operations_overview');
     }
 
     public function getWidgets(): array
     {
         return [
-            // Row 0: Đưa thống kê Payout lên đầu trang (Full width nếu muốn)
+            // Row 0: Summary Payout Stats
             \App\Filament\Widgets\PayoutStats::class,
-            
-            // Row 1: Full width
+
+            // Row 2: Revenue Report Matrix
             \App\Filament\Widgets\UserPlatformMatrixTable::class,
 
-            // Row 2: 2 charts cạnh nhau
+            // Row 3: Payroll Table (Down to Bottom)
+            \App\Filament\Widgets\AdminUserEarningsTable::class,
+
+            // Row 4: Operations Charts (New Top Priority)
             \App\Filament\Widgets\EmailStatusChart::class,
             \App\Filament\Widgets\AccountPlatformChart::class,
 
-            // Row 3: Full width
+            // Row 5: Account Details
             \App\Filament\Widgets\AccountOverview::class,
+
+
         ];
     }
 }

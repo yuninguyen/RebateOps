@@ -19,6 +19,7 @@ class ListAccounts extends ListRecords
         return 'full'; // Ép bảng tràn hết chiều ngang màn hình
     }
     */
+    use \App\Filament\Traits\HasSyncToSheetAction;
 
     protected function getHeaderActions(): array
     {
@@ -40,6 +41,8 @@ class ListAccounts extends ListRecords
                 ->icon('heroicon-o-arrow-down-tray')
                 // 🟢 THÊM DÒNG NÀY: Chỉ hiển thị nếu là Admin
                 ->visible(fn() => auth()->user()?->isAdmin()),
+
+            $this->getSyncToSheetAction('syncAccounts', 'Accounts'),
 
             // Nút Create
             \Filament\Actions\CreateAction::make(),

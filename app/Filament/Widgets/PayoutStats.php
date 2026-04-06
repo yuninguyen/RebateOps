@@ -9,6 +9,10 @@ use Livewire\Attributes\On;
 
 class PayoutStats extends BaseWidget
 {
+    public static function canView(): bool
+    {
+        return !auth()->user()?->isFinance();
+    }
     // 1. Phải khai báo biến này ở đây để lưu trữ ID User khi nhận được từ Table
     public ?int $selectedUserId = null;
 
@@ -32,7 +36,7 @@ class PayoutStats extends BaseWidget
         // 1. Khởi tạo Query cho RebateTracker (Dành cho Card 1 - Confirmed)
         // Đây là nguồn dữ liệu chính xác nhất cho doanh thu đã xác nhận từ platform
         $rebateQuery = \App\Models\RebateTracker::query();
-        
+
         // 2. Khởi tạo Query cho UserPayment (Dành cho Card 2 & 3 - Paid/Exchanged)
         // Đây là nguồn dữ liệu cho các khoản đã thực sự chi trả cho User
         $disbursementQuery = \App\Models\UserPayment::query();
@@ -52,7 +56,7 @@ class PayoutStats extends BaseWidget
         // Đồng bộ 100% với bảng Revenue Report bên dưới
         $totalConfirmedUsd = (clone $rebateQuery)->where('status', 'Confirmed')
             ->sum('rebate_amount');
-            
+
         // --- TÍNH TOÁN CARD 2 & 3: PAID / EXCHANGED (Từ UserPayment/Disbursement) ---
         $totalPaidUsd = (clone $disbursementQuery)->where('status', 'paid')
             ->sum('total_usd');
@@ -61,22 +65,22 @@ class PayoutStats extends BaseWidget
             ->sum('total_vnd');
 
         // Hiển thị nhãn để biết đang lọc hay xem tổng
-        $labelSuffix = $this->selectedUserId ? ' (Filtered)' : ' (Global)';
+        $labelSuffix = $this->selectedUserId ? __('system.payout_logs.fields.filtered') : '';
 
         return [
-            Stat::make('Total CONFIRMED' . $labelSuffix, '$' . number_format($totalConfirmedUsd, 2))
-                ->description('Cashback confirmed')
+            Stat::make(__('system.payout_logs.fields.total_confirmed') . $labelSuffix, '$' . number_format($totalConfirmedUsd, 2))
+                ->description(__('system.widgets.cashback_confirmed_desc'))
                 ->descriptionIcon('heroicon-m-check-circle')
                 ->color('success')
                 ->chart([7, 2, 10, 3, 15, 4, 17]),
 
-            Stat::make('Total Paid (USD)' . $labelSuffix, '$' . number_format($totalPaidUsd, 2))
-                ->description('Completed payments')
+            Stat::make(__('system.payout_logs.fields.total_paid_usd') . $labelSuffix, '$' . number_format($totalPaidUsd, 2))
+                ->description(__('system.widgets.completed_payments_desc'))
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color('warning'),
 
-            Stat::make('Total Exchanged (VND)' . $labelSuffix, number_format($totalVnd, 0, ',', '.') . ' ₫')
-                ->description('Converted to VND')
+            Stat::make(__('system.payout_logs.fields.total_exchanged_vnd') . $labelSuffix, number_format($totalVnd, 0, ',', '.') . ' ₫')
+                ->description(__('system.widgets.converted_to_vnd_desc'))
                 ->descriptionIcon('heroicon-m-arrows-right-left')
                 ->color('info'),
         ];

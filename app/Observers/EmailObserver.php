@@ -5,7 +5,9 @@ namespace App\Observers;
 use App\Models\Email;
 use App\Jobs\SyncGoogleSheetJob;
 
-class EmailObserver
+use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
+
+class EmailObserver implements ShouldHandleEventsAfterCommit
 {
     public function saved(Email $email): void
     {

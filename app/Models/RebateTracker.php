@@ -54,6 +54,19 @@ class RebateTracker extends Model
     protected static function booted()
     {
         static::saving(function ($model) {
+            // 1. Nếu status là không đủ điều kiện (ineligible) -> set 0
+            if ($model->status === 'ineligible') {
+                $model->rebate_amount = 0;
+                return;
+            }
+
+            // 2. Nếu tài khoản bị banned -> set 0
+            $account = $model->account;
+            if ($account && in_array('banned', (array)($account->status ?? []))) {
+                $model->rebate_amount = 0;
+                return;
+            }
+
             // Tự động tính tiền: Tiền nhận = Giá trị đơn * (% / 100)
             $model->rebate_amount = ($model->order_value ?? 0) * (($model->cashback_percent ?? 0) / 100);
         });

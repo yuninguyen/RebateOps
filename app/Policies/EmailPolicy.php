@@ -22,6 +22,11 @@ class EmailPolicy
 
     public function view(User $user, Email $email): bool
     {
+        // Admin & Finance được xem toàn bộ hòm thư
+        if ($user->isAdmin() || $user->isFinance()) {
+            return true;
+        }
+
         // Staff chỉ xem email liên kết với account của mình
         return $email->accounts()->where('user_id', $user->id)->exists();
     }

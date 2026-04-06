@@ -23,10 +23,22 @@ class PriceResource extends Resource
     protected static ?string $model = Account::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static ?string $navigationGroup = 'RESOURCE HUB';
-    protected static ?string $navigationLabel = 'Price.com';
-    protected static ?string $navigationParentItem = 'All Platforms';
     protected static ?int $navigationSort = 6;
+
+    public static function getNavigationLabel(): string
+    {
+        return 'Price.com';
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'resource_hub';
+    }
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return __('system.all_platforms');
+    }
 
     // Thêm dòng này để thu gọn menu bên trái, nhường chỗ cho bảng
     protected static bool $isScopedToTenant = false;

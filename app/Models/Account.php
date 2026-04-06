@@ -49,12 +49,21 @@ class Account extends Model
                 $account->status = ['active'];
             }
         });
+
+        // Tự động xử lý khi trạng thái tài khoản thay đổi
+        static::updated(function ($account) {
+            if (in_array('banned', (array)($account->status ?? []))) {
+                // Nếu tài khoản bị banned, ép toàn bộ rebate_amount về 0
+                $account->rebateTrackers()->update(['rebate_amount' => 0]);
+            }
+        });
     }
 
     public function getFilamentName(): string
     {
         $platform = $this->platform ?: 'General';
-        return "{$this->email_id} - " . strtoupper($platform);
+        $emailAddress = $this->email?->email ?? "Email #{$this->email_id}";
+        return "{$emailAddress} - " . strtoupper($platform);
     }
 
     // Cấu hình theo dõi toàn bộ các cột được phép điền

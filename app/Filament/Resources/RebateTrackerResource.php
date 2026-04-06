@@ -31,10 +31,33 @@ class RebateTrackerResource extends Resource
 
     protected static ?string $model = RebateTracker::class;
 
-    protected static ?string $navigationLabel = 'All Rebate Tracker';
-    protected static ?string $pluralLabel = 'All Rebate Tracker';
-    protected static ?string $navigationGroup = 'WORKING SPACE';
     protected static ?string $navigationIcon = 'heroicon-o-presentation-chart-line';
+    protected static ?int $navigationSort = 1;
+
+    public static function getNavigationLabel(): string
+    {
+        return __('system.trackers.all_rebate');
+    }
+
+    public static function getPluralLabel(): string
+    {
+        return __('system.trackers.all_rebate');
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'working_space';
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return !auth()->user()?->isFinance();
+    }
+
+    public static function canAccess(): bool
+    {
+        return !auth()->user()?->isFinance();
+    }
 
     public static function getEloquentQuery(): Builder
     {

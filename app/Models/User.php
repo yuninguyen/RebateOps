@@ -47,16 +47,23 @@ class User extends Authenticatable implements FilamentUser
         return $this->role === 'admin';
     }
 
+    public function isFinance(): bool
+    {
+        return $this->role === 'finance';
+    }
+
+    public function isStaff(): bool
+    {
+        return $this->role === 'staff' || $this->role === 'operator';
+    }
+
     // Thêm hàm này để khóa cổng Admin Panel
     public function canAccessPanel(\Filament\Panel $panel): bool
     {
-        // Cho phép Admin và Staff được phép đăng nhập vào Panel
-        // Bạn có thể sửa điều kiện này tùy theo cách bạn phân quyền trong DB
-        return in_array($this->role, ['admin', 'staff']);
-
-        // Hoặc đơn giản nhất (cho phép TẤT CẢ mọi người trong bảng users đăng nhập):
-        // return true; 
+        // Cho phép Admin, Finance và Staff đăng nhập vào Panel
+        return in_array($this->role, ['admin', 'staff', 'operator', 'finance']);
     }
+
     /**
      * The attributes that are mass assignable.
      *

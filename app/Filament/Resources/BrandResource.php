@@ -19,9 +19,27 @@ class BrandResource extends Resource
     protected static ?string $model = Brand::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static ?string $navigationGroup = 'RESOURCE HUB';
     protected static ?int $navigationSort = 7;
-    protected static ?string $navigationLabel = 'Brands'; // Cho hiện đầu tiên trong nhóm
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'settings';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('system.brands.navigation_label');
+    }
+
+    public static function getLabel(): ?string
+    {
+        return __('system.brands.label');
+    }
+
+    public static function getPluralLabel(): ?string
+    {
+        return __('system.brands.plural_label');
+    }
 
     // 🟢 CHỈ ADMIN MỚI THẤY VÀ TRUY CẬP ĐƯỢC MENU NÀY
     public static function canViewAny(): bool
@@ -39,28 +57,29 @@ class BrandResource extends Resource
                     ->live(onBlur: true)
                     ->afterStateUpdated(fn($state, $set) => $set('slug', \Str::slug($state))),
                 Forms\Components\Select::make('platform')
+                    ->label(__('system.brands.fields.platform'))
                     ->options(\App\Filament\Resources\Traits\HasPlatform::getPlatforms())
                     ->required(),
                 Forms\Components\TextInput::make('slug')
                     ->required()
                     ->unique(ignoreRecord: true),
                 Forms\Components\TextInput::make('boost_percentage')
-                    ->label('Boost (%)')
+                    ->label(__('system.brands.fields.boost_percentage'))
                     ->numeric()
                     ->default(0)
                     ->suffix('%')
-                    ->helperText('Default reward % when withdrawing this Brand type'),
+                    ->helperText(__('system.brands.fields.boost_helper')),
                 Forms\Components\TextInput::make('maximum_limit')
-                    ->label('Maximum Withdrawal Limit ($)')
+                    ->label(__('system.brands.fields.maximum_limit'))
                     ->numeric()
                     ->prefix('$')
-                    ->helperText('If the account balance exceeds this amount, the Brand will be hidden/locked.'),
+                    ->helperText(__('system.brands.fields.limit_helper')),
                 Forms\Components\TextInput::make('gc_rate')
-                    ->label('Exchange Rate (VND)')
+                    ->label(__('system.brands.fields.gc_rate'))
                     ->numeric()
                     ->prefix('₫')
                     ->default(20000)
-                    ->helperText('The exchange rate applied when paying for this type of Gift Card for the User.'),
+                    ->helperText(__('system.brands.fields.gc_rate_helper')),
             ]);
     }
 
@@ -69,17 +88,16 @@ class BrandResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Brand Name')
+                    ->label(__('system.brands.columns.name'))
                     ->alignment(Alignment::Center)
                     ->searchable(),
                 Tables\Columns\TextColumn::make('platform')
-                    ->label('Platform')
+                    ->label(__('system.brands.columns.platform'))
                     ->alignment(Alignment::Center)
                     ->searchable()
                     ->formatStateUsing(fn(string $state): string => \App\Models\Platform::where('slug', $state)->value('name') ?? $state),
-
                 Tables\Columns\TextColumn::make('boost_percentage')
-                    ->label('Boost')
+                    ->label(__('system.brands.columns.boost'))
                     ->alignment(Alignment::Center)
                     ->suffix('%')
                     ->sortable()
@@ -88,14 +106,14 @@ class BrandResource extends Resource
                     ->color('success')
                     ->weight('bold'),
                 Tables\Columns\TextColumn::make('maximum_limit')
-                    ->label('Maximum Withdrawal Limit')
+                    ->label(__('system.brands.columns.limit'))
                     ->alignment(Alignment::Center)
                     ->money('USD')
                     ->searchable()
-                    ->placeholder('No Limit') // Nếu null hiện No Limit
+                    ->placeholder(__('system.brands.columns.no_limit')) 
                     ->color('danger'),
                 Tables\Columns\TextColumn::make('gc_rate')
-                    ->label('Rate')
+                    ->label(__('system.brands.columns.rate'))
                     ->alignment(Alignment::Center)
                     ->money('VND', locale: 'vi_VN')
                     ->color('primary'),
@@ -107,16 +125,15 @@ class BrandResource extends Resource
             ->filters([
                 // 1. LỌC THEO PLATFORM (Quan trọng nhất)
                 Tables\Filters\SelectFilter::make('platform')
-                    ->label('Filter by Platform')
+                    ->label(__('system.brands.filters.platform'))
                     ->options(\App\Filament\Resources\Traits\HasPlatform::getPlatforms())
                     ->searchable(), // Cho phép gõ tìm platform nếu danh sách dài
 
                 // 2. LỌC THEO TRẠNG THÁI BOOST (Thẻ có thưởng vs Thẻ không thưởng)
                 Tables\Filters\TernaryFilter::make('has_boost')
-                    ->label('Boost (%)')
-                    ->placeholder('All Brands')
-                    ->trueLabel('Brands with Boost')
-                    ->falseLabel('No Boost')
+                    ->label(__('system.brands.filters.boost'))
+                    ->trueLabel(__('system.brands.filters.with_boost'))
+                    ->falseLabel(__('system.brands.filters.no_boost'))
                     ->queries(
                         true: fn(Builder $query) => $query->where('boost_percentage', '>', 0),
                         false: fn(Builder $query) => $query->where(fn($q) => $q->where('boost_percentage', 0)->orWhereNull('boost_percentage')),
@@ -124,10 +141,9 @@ class BrandResource extends Resource
 
                 // 3. LỌC THEO GIỚI HẠN RÚT (Có Limit vs Không Limit)
                 Tables\Filters\TernaryFilter::make('has_limit')
-                    ->label('Maximum Withdrawal Limit')
-                    ->placeholder('All Brands')
-                    ->trueLabel('Limited Brands')
-                    ->falseLabel('Unlimited Brands')
+                    ->label(__('system.brands.filters.limit'))
+                    ->trueLabel(__('system.brands.filters.limited'))
+                    ->falseLabel(__('system.brands.filters.unlimited'))
                     ->queries(
                         true: fn(Builder $query) => $query->where('maximum_limit', '>', 0),
                         false: fn(Builder $query) => $query->where(fn($q) => $q->where('maximum_limit', 0)->orWhereNull('maximum_limit')),

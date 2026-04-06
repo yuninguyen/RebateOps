@@ -21,23 +21,47 @@ use Filament\Tables\Enums\FiltersLayout;
 
 class EmailResource extends Resource
 {
-    use \App\Filament\Resources\Traits\HasEmailSchema;
 
     protected static ?string $model = Email::class;
+    protected static ?string $title = "email";
 
+    protected static ?string $icon = "";
+
+    public static function getNavigationLabel(): string
+    {
+        return __('system.labels.email_address');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('system.labels.email_address');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('system.labels.email_address_list');
+    }
     // 🟢 DRY: Status labels dùng chung cho toàn bộ Resource
-    public const STATUS_LABELS = [
-        'active' => 'Live',
-        'live' => 'Live',
-        'disabled' => 'Disabled',
-        'locked' => 'Locked',
-    ];
+    public static function getStatusLabel(?string $state): string
+    {
+        if (!$state)
+            return 'N/A';
+        $state = strtolower($state);
+
+        // Map 'live' to 'active' if needed, as per previous logic
+        $key = ($state === 'live') ? 'active' : $state;
+
+        return __("system.email_status.{$key}");
+    }
 
     // Đổi sang icon phong bì cho Email
     protected static ?string $navigationIcon = 'heroicon-o-envelope';
 
     // Thêm dòng này để gom vào nhóm
-    protected static ?string $navigationGroup = 'RESOURCE HUB';
+    public static function getNavigationGroup(): ?string
+    {
+        return 'resource_hub';
+    }
 
     // Thêm dòng này để Email luôn nằm trên Account
     protected static ?int $navigationSort = 1;
@@ -47,7 +71,7 @@ class EmailResource extends Resource
         $query = parent::getEloquentQuery();
 
         // Admin được xem toàn bộ hòm thư
-        if (auth()->user()?->isAdmin()) {
+        if (auth()->user()?->isAdmin() || auth()->user()?->isFinance()) {
             return $query;
         }
 
@@ -80,35 +104,34 @@ class EmailResource extends Resource
                 Forms\Components\Section::make(__('system.email_detail_section'))
                     ->schema([
                         Forms\Components\TextInput::make('email')
-                            ->label('Email Address')
+                            ->label(__('system.labels.email_address'))
                             ->email()
                             ->required()
                             ->disabled(fn() => !auth()->user()?->isAdmin()) // 🟢 Khóa đối với nhân viên
                             ->unique(ignoreRecord: true) // Kiểm tra trùng lặp và báo lỗi thân thiện
                             ->validationMessages([
-                                'unique' => 'This email already exists in the system.',
+                                'unique' => __('validation.unique', ['attribute' => __('system.labels.email_address')]),
                             ]),
 
                         Forms\Components\TextInput::make('email_password')
-                            ->label('Email Password')
+                            ->label(__('system.labels.password'))
                             ->required(),
 
                         Forms\Components\TextInput::make('recovery_email')
-                            ->label('Recovery Email')
+                            ->label(__('system.labels.recovery_email'))
                             ->disabled(fn() => !auth()->user()?->isAdmin()) // 🟢 Khóa
                             ->email(),
 
                         Forms\Components\TextInput::make('two_factor_code')
-                            ->label('2FA Code/Recovery code')
+                            ->label(__('system.labels.two_factor_code')) // Tạm giữ English vì là technical term
                             ->disabled(fn() => !auth()->user()?->isAdmin()), // 🟢 Khóa
 
                         Forms\Components\Select::make('status')
-                            ->label('Status')
+                            ->label(__('system.labels.status'))
                             ->options([
-                                'active' => 'Live',
-                                'disabled' => 'Disabled',
-                                'locked' => 'Locked',
-                                'default' => 'N/A'
+                                'active' => __('system.email_status.active'),
+                                'disabled' => __('system.email_status.disabled'),
+                                'locked' => __('system.email_status.locked'),
                             ])
                             ->default('active')
                             ->required()
@@ -116,20 +139,20 @@ class EmailResource extends Resource
                             ->native(false),
 
                         Forms\Components\DatePicker::make('email_created_at')
-                            ->label('Date Created')
-                            ->placeholder('dd/mm/yyyy')
+                            ->label(__('system.labels.date_create')) // Tạm dùng hoặc thêm key riêng
+                            ->placeholder(__('system.placeholders.date'))
                             ->displayFormat('d/m/Y') // Định dạng hiển thị khi nhập
                             ->format('Y-m-d') // Định dạng chuẩn để lưu vào MySQL
                             ->native(false) // Dùng giao diện hiện đại của Filament thay vì native
                             ->dehydrated(true) // Đảm bảo trường này được gửi về backend
                             ->disabled(fn() => !auth()->user()?->isAdmin()) // 🟢 Khóa
                             ->default(null) // Đảm bảo không tự động lấy ngày hôm nay làm mặc định
-                            ->live(),  // Đồng bộ dữ liệu ngay lập tức,
+                            ->live(),   // Đồng bộ dữ liệu ngay lập tức
 
                         // ĐÂY LÀ CỘT NOTE BẠN VỪA YÊU CẦU
                         Forms\Components\Textarea::make('note')
-                            ->label('Note')
-                            ->placeholder('Please note this email specifically if there are any issues...')
+                            ->label(__('system.labels.note'))
+                            ->placeholder(__('system.placeholders.email_note_helper'))
                             ->columnSpanFull()
 
                     ])->columns(2), // Chia 2 cột cho cân đối
@@ -143,7 +166,7 @@ class EmailResource extends Resource
             ->modifyQueryUsing(fn(Builder $query) => $query->with(['accounts'])) //Tối ưu hóa hiệu năng (Optimization)
             ->columns([
                 Tables\Columns\TextColumn::make('id')
-                    ->label('ID')
+                    ->label(__('system.labels.id'))
                     ->alignment(Alignment::Center)
                     ->extraHeaderAttributes(['style' => 'width: 30px; min-width: 30px'])
                     ->extraAttributes(['style' => 'width: 30px; min-width: 30px'])
@@ -152,38 +175,37 @@ class EmailResource extends Resource
                     ->color('gray'),
 
                 Tables\Columns\TextColumn::make('status')
-                    ->label('Status')
+                    ->label(__('system.labels.status'))
                     ->alignment(Alignment::Center)
-                    ->extraHeaderAttributes(['style' => 'width: 50px; min-width: 50px'])
-                    ->extraAttributes(['style' => 'width: 50px; min-width: 50px'])
+                    //->extraHeaderAttributes(['style' => 'width: 50px; min-width: 50px'])
+                    //->extraAttributes(['style' => 'width: 50px; min-width: 50px'])
                     ->searchable()
                     ->toggleable() // Cho phép ẩn/hiện cột này
-                    ->formatStateUsing(fn(string $state): string => static::STATUS_LABELS[$state] ?? static::STATUS_LABELS[strtolower($state)] ?? 'N/A')
-                    ->color(fn(string $state): string => match (strtolower($state)) {
-                        'active', 'live' => 'success',
+                    ->formatStateUsing(fn(?string $state): string => static::getStatusLabel($state))
+                    ->color(fn(?string $state): string => [
+                        'active' => 'success',
+                        'live' => 'success',
                         'disabled' => 'warning',
                         'locked' => 'danger',
-                        default => 'gray',
-                    })
-                    ->width('50px'), // Cố định độ rộng cho cột Status
+                    ][strtolower($state ?? '')] ?? 'gray'),
 
                 Tables\Columns\TextColumn::make('email')
-                    ->label('Email Address')
+                    ->label(__('system.labels.email_address'))
                     ->alignment(Alignment::Center)
                     ->searchable()
                     ->wrap()
                     ->extraHeaderAttributes(['style' => 'width: 230px; min-width: 230px'])
                     ->extraAttributes(['style' => 'width: 230px; min-width: 230px'])
                     ->copyable()
-                    ->copyMessage('Copied email to clipboard!')
+                    ->copyMessage(__('system.labels.email_copied'))
                     ->html()
                     ->formatStateUsing(function (Email $record): string {
                         $email = e($record->email);
-                        $twoFA = e($record->two_factor_code ?? 'N/A'); // Nếu không có mã 2FA nào, hiển thị "N/A"
-                        $note = e($record->note ?? 'N/A'); // Đồng bộ đúng trường 'note'
+                        $twoFA = e($record->two_factor_code ?? __('system.n/a'));
+                        $note = e($record->note ?? __('system.n/a'));
                         $dateCreate = $record->email_created_at instanceof \Carbon\Carbon
                             ? $record->email_created_at->format('d/m/Y')
-                            : ($record->email_created_at ? \Carbon\Carbon::parse($record->email_created_at)->format('d/m/Y') : 'N/A');
+                            : ($record->email_created_at ? \Carbon\Carbon::parse($record->email_created_at)->format('d/m/Y') : __('system.n/a'));
 
                         return "
                             <div style='text-align: left; font-size: 13px; line-height: 1.6; min-width: 250px; white-space: normal; word-break: break-all;'>
@@ -192,18 +214,18 @@ class EmailResource extends Resource
                                 </div>
 
                                 <div style='margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: wrap;'>
-                                    <span style='color: #64748b;'>2FA/Code: </span> 
+                                    <span style='color: #64748b'>" . __('system.labels.two_factor_code') . ": </span> 
                                     <span style='color: #1e293b;'>{$twoFA}</span>
                                 </div>
                             
                                 <div style='margin-top: 8px; padding-top: 4px; border-top: 1px solid #f1f5f9; line-height: 1.8;'>
                                     <div style='margin-top: 2px;'>
-                                        <span style='color: #64748b;'>Date Create:</span> 
+                                        <span style='color: #64748b'>" . __('system.labels.date_create') . ":</span> 
                                         <span style='color: #1e293b;'>{$dateCreate}</span>
                                     </div>
 
                                     <div style='margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: wrap;'>
-                                        <span style='color: #64748b;'>Note: </span> 
+                                        <span style='color: #64748b;'>" . __('system.labels.note') . ": </span> 
                                         <span style='color: #1e293b;'>{$note}</span>
                                     </div>
                                 </div>
@@ -212,13 +234,13 @@ class EmailResource extends Resource
                     }),
 
                 Tables\Columns\TextColumn::make('email_password')
-                    ->label('Password')
+                    ->label(__('system.labels.password'))
                     ->alignment(Alignment::Center)
                     ->copyable()
                     ->searchable(),
 
                 Tables\Columns\TextColumn::make('recovery_email')
-                    ->label('Recovery Email')
+                    ->label(__('system.labels.recovery_email'))
                     ->alignment(Alignment::Center)
                     ->extraHeaderAttributes(['style' => 'width: 240px; min-width: 240px'])
                     ->extraAttributes(['style' => 'width: 240px; min-width: 240px'])
@@ -227,7 +249,7 @@ class EmailResource extends Resource
 
                 //Hiển thị nhà cung cấp email nếu có (ví dụ: Gmail, Outlook)
                 Tables\Columns\TextColumn::make('provider')
-                    ->label('Provider')
+                    ->label(__('system.labels.provider'))
                     ->alignment(Alignment::Center)
                     ->toggleable()
                     // Tự động viết hoa chữ cái đầu (outlook -> Outlook)
@@ -236,23 +258,24 @@ class EmailResource extends Resource
 
                 // Cột thông minh: Hiển thị số lượng tài khoản đang dùng Email này
                 Tables\Columns\TextColumn::make('accounts_count')
-                    ->label('Usage')
+                    ->label(__('system.labels.usage'))
                     ->counts('accounts')
                     ->alignment(Alignment::Center)
-                    ->formatStateUsing(fn($state) => $state > 0 ? "{$state}" : 'N/A')
+                    ->formatStateUsing(fn($state) => $state > 0 ? "{$state}" : __('system.n/a'))
                     ->color(fn($state) => $state > 0 ? 'success' : 'secondary')
                     ->wrap()
                     ->toggleable(), // Cho phép ẩn/hiện cột này
 
                 // Hiển thị các tài khoản đang dùng email này, nếu có
                 Tables\Columns\TextColumn::make('accounts.platform')
-                    ->label('Platforms')
-                    ->placeholder('N/A') // Nếu không có tài khoản nào đang dùng email này
+                    ->label(__('system.labels.platform'))
+                    ->placeholder(__('system.n/a')) // Nếu không có tài khoản nào đang dùng email này
                     ->alignment(Alignment::Center)
                     ->extraHeaderAttributes(['style' => 'width: 110px; min-width: 110px'])
                     ->extraAttributes(['style' => 'width: 110px; min-width: 110px'])
                     ->formatStateUsing(function ($state) {
-                        if (!$state) return 'N/A';
+                        if (!$state)
+                            return 'N/A';
                         $platforms_map = \App\Models\Platform::pluck('name', 'slug')->toArray();
                         $items = is_array($state) ? $state : explode(', ', (string) $state);
                         return collect($items)->map(fn($s) => $platforms_map[$s] ?? $s)->implode(', ');
@@ -264,7 +287,7 @@ class EmailResource extends Resource
             ->filters([
                 // 1. Bộ lọc theo Provider (Gmail, Outlook, Yahoo...)
                 SelectFilter::make('provider')
-                    ->label('Provider')
+                    ->label(__('system.labels.provider'))
                     ->options(function () {
                         // Lấy danh sách các provider duy nhất từ database
                         return \App\Models\Email::query()
@@ -277,11 +300,10 @@ class EmailResource extends Resource
                         })
                             ->toArray();
                     })
-                    ->searchable() // Cho phép tìm nhanh nếu danh sách provider dài
-                    ->placeholder('All Provider'),
+                    ->searchable(), // Cho phép tìm nhanh nếu danh sách provider dài
 
                 SelectFilter::make('email_created_at')
-                    ->label('Year') // Sử dụng tên tiếng Anh chuyên nghiệp
+                    ->label(__('system.labels.year_created')) // Sử dụng tên tiếng Anh chuyên nghiệp
                     ->options(function () {
                         return \App\Models\Email::query()
                             ->whereNotNull('email_created_at')
@@ -296,17 +318,15 @@ class EmailResource extends Resource
                             return $query;
                         }
                         return $query->whereYear('email_created_at', $data['value']);
-                    })
-                    ->placeholder('All Years'), // Đổi placeholder cho đồng bộ
+                    }),
 
                 // 2. Bộ lọc theo Trạng thái (Live, Locked, Disabled)
                 SelectFilter::make('status')
-                    ->label('Status')
-                    ->placeholder('All Status')
+                    ->label(__('system.labels.status'))
                     ->options([
-                        'active' => 'Live',
-                        'disabled' => 'Disabled',
-                        'locked' => 'Locked',
+                        'active' => __('system.email_status.active'),
+                        'disabled' => __('system.email_status.disabled'),
+                        'locked' => __('system.email_status.locked'),
                     ]),
                 Tables\Filters\TrashedFilter::make(), // 🟢 BẬT TÍNH NĂNG THÙNG RÁC
             ])
@@ -321,26 +341,26 @@ class EmailResource extends Resource
                 Tables\Actions\ActionGroup::make([
                     // Hiển thị trực tiếp nút Copy
                     Tables\Actions\Action::make('copy_full_info')
-                        ->label('Copy')
+                        ->label(__('system.actions.copy'))
                         ->icon('heroicon-m-clipboard-document-check')
                         ->action(function ($record, $livewire) {
 
                             //  Khai báo Header
                             $header = " | ID | Status | Year Create | Email Address | Email Password | Recovery Email | 2FA Code | Email Note | Provider | Usage | Platforms | ";
                             $id = $record->id;
-                            $emailStatus = static::STATUS_LABELS[$record->status] ?? ucfirst($record->status ?? 'N/A');
+                            $emailStatus = static::getStatusLabel($record->status);
 
                             // Lấy năm từ email_created_at của Email, nếu không có thì lấy N/A
-                            $yearCreated = $record->email_created_at ? $record->email_created_at->format('Y') : 'N/A';
-                            $email = $record->email ?? 'N/A';
-                            $emailPass = $record->email_password ?? 'N/A';
-                            $recovery = $record->recovery_email ?? 'N/A';
-                            $twoFA = $record->two_factor_code ?? 'N/A';
-                            $emailNote = $record->note ?? 'N/A'; // Khớp với trường 'note' trong DB
+                            $yearCreated = $record->email_created_at ? $record->email_created_at->format('Y') : __('system.n/a');
+                            $email = $record->email ?? __('system.n/a');
+                            $emailPass = $record->email_password ?? __('system.n/a');
+                            $recovery = $record->recovery_email ?? __('system.n/a');
+                            $twoFA = $record->two_factor_code ?? __('system.n/a');
+                            $emailNote = $record->note ?? __('system.n/a'); // Khớp với trường 'note' trong DB
                             $provider = $record->provider ? ucfirst($record->provider) : 'Other'; // Hiển thị nhà cung cấp email nếu có, nếu không thì là 'Other'
-                            $usage = $record->accounts_count > 0 ? "{$record->accounts_count}" : 'N/A';
+                            $usage = $record->accounts_count > 0 ? "{$record->accounts_count}" : __('system.n/a');
                             $platforms_map = \App\Models\Platform::pluck('name', 'slug')->toArray();
-                            $platforms = $record->accounts->pluck('platform')->map(fn($s) => $platforms_map[$s] ?? $s)->implode(', ') ?: 'N/A';
+                            $platforms = $record->accounts->pluck('platform')->map(fn($s) => $platforms_map[$s] ?? $s)->implode(', ') ?: __('system.n/a');
 
                             $singleLine = " | {$id} | {$emailStatus} | {$yearCreated} | {$email} | {$emailPass} | {$recovery} | {$twoFA} | {$emailNote} | {$provider} | {$usage} | {$platforms} | ";
                             $finalSingleLine = $header . "\n" . $singleLine; // Kết hợp header và data
@@ -353,7 +373,7 @@ class EmailResource extends Resource
                             $livewire->dispatch('copy-to-clipboard', text: $info);
 
                             \Filament\Notifications\Notification::make()
-                                ->title('Copied Successfully!')
+                                ->title(__('system.actions.copied'))
                                 ->success()
                                 ->send();
                         }),
@@ -367,41 +387,17 @@ class EmailResource extends Resource
                 Tables\Actions\BulkActionGroup::make([
                     // 🟢 NÚT EXPORT EMAIL ĐƯỢC CHỌN
                     Tables\Actions\BulkAction::make('export_emails_to_sheet')
-                        ->label('Export to Google Sheet')
+                        ->label(__('system.actions.export_to_sheet'))
                         ->icon('heroicon-o-table-cells')
                         ->color('success')
-                        // 🟢 THÊM DÒNG NÀY: Chỉ hiển thị nếu là Admin
                         ->visible(fn() => auth()->user()?->isAdmin())
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records, \App\Services\GoogleSyncService $syncService) {
                             try {
-                                $sheetService = app(\App\Services\GoogleSheetService::class);
-                                $targetTab = 'Emails';
-
-                                // 1. Đảm bảo Tab tồn tại
-                                $sheetService->createSheetIfNotExist($targetTab);
-
-                                // 2. Chuẩn bị dữ liệu (Sử dụng hàm format từ Trait HasEmailSchema)
-                                $rows = $records->map(fn($record) => static::formatEmailForSheet($record))->toArray();
-
-                                // 3. Upsert lên Sheet (Tự động nhận diện Header từ Trait)
-                                $sheetService->upsertRows($rows, $targetTab, static::$emailHeaders);
-
-                                // 4. ĐỊNH DẠNG SAU KHI SYNC
-                                // Tìm cột Status để bôi màu
-                                $statusIdx = array_search('Status', static::$emailHeaders);
-                                $sheetService->applyFormattingWithRules($targetTab, $statusIdx, [
-                                    'Live' => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
-                                    'Disabled' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],
-                                    'Locked' => ['red' => 0.9, 'green' => 0.4, 'blue' => 0.4],
-                                ]);
-
-                                // Clip các cột dài (Email, Pass, Platforms, Note)
-                                $sheetService->formatColumnsAsClip($targetTab, 2, 3);
-                                $sheetService->formatColumnsAsClip($targetTab, 9, 10);
+                                $result = $syncService->syncEmails($records);
 
                                 \Filament\Notifications\Notification::make()
-                                    ->title('Export Success!')
-                                    ->body('Synced ' . count($records) . ' email(s) to Google Sheet.')
+                                    ->title(__('system.notifications.sync_success'))
+                                    ->body(__('system.notifications.sync_success_msg', ['count' => count($records)]))
                                     ->success()
                                     ->send();
                             } catch (\Exception $e) {
@@ -412,10 +408,11 @@ class EmailResource extends Resource
                                     ->send();
                             }
                         })
-                        ->deselectRecordsAfterCompletion(), // Tự động bỏ tích sau khi xong
+                        ->deselectRecordsAfterCompletion(),
+
                     // Reset Date Create Selected
                     Tables\Actions\BulkAction::make('clear_date_create')
-                        ->label('Clear Date Create Selected')
+                        ->label(__('system.actions.clear_date_create'))
                         ->icon('heroicon-o-trash')
                         ->color('danger')
                         ->visible(fn() => auth()->user()?->isAdmin()) // 🟢 KHÓA ĐỐI VỚI STAFF
@@ -425,14 +422,15 @@ class EmailResource extends Resource
                     // Exported Seclected
                     \Filament\Tables\Actions\ExportBulkAction::make()
                         ->exporter(\App\Filament\Exports\EmailExporter::class)
-                        ->label('Export Selected')
+                        ->label(__('system.actions.export_selected'))
                         ->icon('heroicon-m-arrow-down-tray')
                         ->color('success')
+                        ->visible(fn() => auth()->user()?->isAdmin())
                         ->deselectRecordsAfterCompletion(),
 
                     // Copy Selected
                     Tables\Actions\BulkAction::make('copy_email_selected')
-                        ->label('Copy Selected')
+                        ->label(__('system.actions.copy_selected'))
                         ->icon('heroicon-m-clipboard-document-list')
                         ->color('warning')
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records, $livewire) {
@@ -443,19 +441,19 @@ class EmailResource extends Resource
                             foreach ($records as $index => $record) {
                                 // Lấy dữ liệu từng dòng
                                 $id = $record->id;
-                                $emailStatus = static::STATUS_LABELS[$record->status] ?? ucfirst($record->status ?? 'N/A');
+                                $emailStatus = static::getStatusLabel($record->status);
 
                                 // Lấy năm từ email_created_at của Email, nếu không có thì lấy N/A
-                                $yearCreated = $record->email_created_at ? $record->email_created_at->format('Y') : 'N/A';
+                                $yearCreated = $record->email_created_at ? $record->email_created_at->format('Y') : __('system.n/a');
                                 $email = e($record->email); // Đảm bảo escape để tránh lỗi nếu email có ký tự đặc biệt
-                                $pass = $record->email_password ?? 'N/A';
-                                $recovery = $record->recovery_email ?? 'N/A';
-                                $twoFA = e($record->two_factor_code ?? 'N/A'); // Escape 2FA code để tránh lỗi nếu có ký tự đặc biệt
-                                $note = e($record->note ?? 'N/A'); // Đồng bộ đúng trường 'note'
+                                $pass = $record->email_password ?? __('system.n/a');
+                                $recovery = $record->recovery_email ?? __('system.n/a');
+                                $twoFA = e($record->two_factor_code ?? __('system.n/a')); // Escape 2FA code để tránh lỗi nếu có ký tự đặc biệt
+                                $note = e($record->note ?? __('system.n/a')); // Đồng bộ đúng trường 'note'
                                 $provider = $record->provider ? ucfirst($record->provider) : 'Other';
-                                $usage = $record->accounts_count > 0 ? "{$record->accounts_count}" : 'N/A';
+                                $usage = $record->accounts_count > 0 ? "{$record->accounts_count}" : __('system.n/a');
                                 $platforms_map = \App\Models\Platform::pluck('name', 'slug')->toArray();
-                                $platforms = $record->accounts->pluck('platform')->map(fn($s) => $platforms_map[$s] ?? $s)->implode(', ') ?: 'N/A'; // Lấy danh sách platform đang dùng email này
+                                $platforms = $record->accounts->pluck('platform')->map(fn($s) => $platforms_map[$s] ?? $s)->implode(', ') ?: __('system.n/a'); // Lấy danh sách platform đang dùng email này
                 
                                 // Định dạng thông tin cho từng email
                                 $output .= " | {$id} | {$emailStatus} | {$yearCreated} | {$email} | {$pass} | {$recovery} | {$twoFA} | {$note} | {$provider} | {$usage} | {$platforms} | \n";
@@ -466,7 +464,7 @@ class EmailResource extends Resource
 
                             // Thông báo thành công
                             \Filament\Notifications\Notification::make()
-                                ->title('Copied Successfully!')
+                                ->title(__('system.actions.copied'))
                                 ->success()
                                 ->send();
                         })
@@ -475,9 +473,11 @@ class EmailResource extends Resource
 
                         ->deselectRecordsAfterCompletion(), // Tự động bỏ chọn sau khi copy xong
                     // 🟢 Khôi phục nhiều dòng
-                    Tables\Actions\RestoreBulkAction::make(),
+                    Tables\Actions\RestoreBulkAction::make()
+                        ->visible(fn() => auth()->user()?->isAdmin()),
                     // Delete Selected    
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn() => auth()->user()?->isAdmin()),
                 ])
             ]);
     }

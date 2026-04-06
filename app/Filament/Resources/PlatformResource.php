@@ -17,9 +17,27 @@ class PlatformResource extends Resource
 {
     protected static ?string $model = Platform::class;
     protected static ?string $navigationIcon = 'heroicon-o-puzzle-piece';
-    protected static ?string $navigationGroup = 'RESOURCE HUB';
     protected static ?int $navigationSort = 6;
-    protected static ?string $navigationLabel = 'Platforms';
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'settings';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('system.platforms.navigation_label');
+    }
+
+    public static function getLabel(): ?string
+    {
+        return __('system.platforms.label');
+    }
+
+    public static function getPluralLabel(): ?string
+    {
+        return __('system.platforms.plural_label');
+    }
 
     public static function canViewAny(): bool
     {
@@ -34,16 +52,19 @@ class PlatformResource extends Resource
                 Forms\Components\Section::make()
                     ->schema([
                         Forms\Components\TextInput::make('name')
+                            ->label(__('system.platforms.fields.name'))
                             ->required()
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn($state, $set) => $set('slug', \Str::slug($state))),
                         Forms\Components\TextInput::make('slug')
+                            ->label(__('system.platforms.fields.slug'))
                             ->required()
                             ->unique(ignoreRecord: true),
                         Forms\Components\Toggle::make('is_active')
-                            ->label('Active Status')
+                            ->label(__('system.platforms.fields.is_active'))
                             ->default(true),
                         Forms\Components\TextInput::make('sort_order')
+                            ->label(__('system.platforms.fields.sort_order'))
                             ->numeric()
                             ->default(0),
                     ])->columns(2),
@@ -55,24 +76,25 @@ class PlatformResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Platform Name')
+                    ->label(__('system.platforms.columns.name'))
                     ->sortable()
                     ->searchable(),
                 Tables\Columns\TextColumn::make('slug')
+                    ->label(__('system.platforms.fields.slug'))
                     ->sortable()
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\ToggleColumn::make('is_active')
-                    ->label('Active'),
+                    ->label(__('system.platforms.columns.is_active')),
                 Tables\Columns\TextColumn::make('sort_order')
-                    ->label('Sort')
+                    ->label(__('system.platforms.columns.sort_order'))
                     ->sortable(),
             ])
             ->defaultSort('is_active', 'desc')
-            ->modifyQueryUsing(fn (Builder $query) => $query->orderBy('is_active', 'desc')->orderBy('sort_order', 'asc'))
+            ->modifyQueryUsing(fn(Builder $query) => $query->orderBy('is_active', 'desc')->orderBy('sort_order', 'asc'))
             ->filters([
                 Tables\Filters\TernaryFilter::make('is_active')
-                    ->label('Active Status'),
+                    ->label(__('system.platforms.filters.is_active')),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

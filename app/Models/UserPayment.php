@@ -6,13 +6,21 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Traits\LogsActivity; // Bật tính năng Log
 use Spatie\Activitylog\LogOptions;          // Tùy chọn Log
 
 class UserPayment extends Model
 {
-    use LogsActivity; // Kích hoạt "máy quay" cho UserPayment
-    use HasFactory;
+    use LogsActivity, HasFactory, SoftDeletes; // Kích hoạt "máy quay" và xóa mềm
+
+    protected static function booted()
+    {
+        static::deleting(function ($payment) {
+            // 🟢 TỰ ĐỘNG GIẢI PHÓNG: Khi xóa phiếu lương, các đơn rút tiền con sẽ quay về "Chưa chốt sổ" (Pending)
+            $payment->payoutLogs()->update(['user_payment_id' => null]);
+        });
+    }
 
     // Các cột được phép lưu dữ liệu (Mass Assignment)
     protected $fillable = [

@@ -14,8 +14,35 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class PayoutLog extends Model
 {
     use LogsActivity; // Kích hoạt máy quay cho PayoutLog
-
     use SoftDeletes;
+
+    /**
+     * CỜ ĐỒNG BỘ: Ngăn chặn vòng lặp vô tận khi đồng bộ từ Google Sheets
+     */
+    public bool $is_syncing_from_sheet = false;
+
+    protected static function booted(): void
+    {
+        // 🟢 TỰ ĐỘNG HOÀN THÀNH ĐƠN RÚT TIỀN KHI CÓ LỆNH ĐỔI TIỀN (LIQUIDATION)
+        static::created(function (PayoutLog $record) {
+            if ($record->transaction_type === 'liquidation' && $record->parent_id) {
+                $parent = $record->parent;
+                if ($parent && $parent->status !== 'completed') {
+                    $parent->update(['status' => 'completed']);
+                }
+            }
+        });
+
+        static::updated(function (PayoutLog $record) {
+            if ($record->transaction_type === 'liquidation' && $record->parent_id) {
+                $parent = $record->parent;
+                if ($parent && $parent->status !== 'completed') {
+                    $parent->update(['status' => 'completed']);
+                }
+            }
+        });
+    }
+
     protected $fillable = [
         // --- Các trường định danh ---
         'user_id',              // 🟢 MỚI: Người thực hiện giao dịch

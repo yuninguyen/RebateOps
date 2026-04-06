@@ -240,13 +240,14 @@ class GoogleSheetService
             $targetSheet = $sheetName ?? $this->getFirstSheetName();
             $safeSheetName = "'" . str_replace("'", "''", $targetSheet) . "'";
 
-            $existingIds = $this->readSheet('A1:AC', $targetSheet);
+            $existingIds = $this->readSheet('A2:AC', $targetSheet);
 
             $idMap = [];
             if (!empty($existingIds)) {
                 foreach ($existingIds as $index => $row) {
                     if (isset($row[0]) && trim($row[0]) !== '') {
-                        $idMap[(string)$row[0]] = $index + 1;
+                        // 🟢 FIX BUG #10: Bắt đầu từ hàng 2, nên index 0 của bảng dữ liệu là hàng 2 trên Sheet
+                        $idMap[(string)$row[0]] = $index + 2;
                     }
                 }
             }
@@ -255,27 +256,36 @@ class GoogleSheetService
             $appendData = [];
 
             foreach ($dataRows as $rowData) {
-                $row = array_values((array)$rowData);
-                $id = (string)$row[0];
+                // Đảm bảo mỗi dòng là một mảng phẳng, chỉ chứa chuỗi (sequential string array)
+                $rawRow = is_array($rowData) ? $rowData : (array)$rowData;
+                $row = [];
+                foreach ($rawRow as $val) {
+                    $row[] = ($val === null) ? '' : (string)$val;
+                }
+                
+                $id = isset($row[0]) ? (string)$row[0] : '';
 
-                if (isset($idMap[$id])) {
+                if ($id !== '' && isset($idMap[$id])) {
                     $rowNumber = $idMap[$id];
-                    $updateData[] = new \Google\Service\Sheets\ValueRange([
-                        'range' => "{$safeSheetName}!A{$rowNumber}",
-                        'values' => [$row]
-                    ]);
+                    
+                    $vr = new \Google\Service\Sheets\ValueRange();
+                    $vr->setRange("{$safeSheetName}!A{$rowNumber}");
+                    $vr->setValues([$row]);
+                    $updateData[] = $vr;
                 } else {
                     $appendData[] = $row;
                 }
             }
 
             if (!empty($updateData)) {
-                $batchRequest = new \Google\Service\Sheets\BatchUpdateValuesRequest([
-                    'valueInputOption' => 'RAW',
-                    'data' => $updateData
-                ]);
+                $batchRequest = new \Google\Service\Sheets\BatchUpdateValuesRequest();
+                $batchRequest->setValueInputOption('RAW');
+                $batchRequest->setData($updateData);
+                
                 $this->service->spreadsheets_values->batchUpdate($this->spreadsheetId, $batchRequest);
             }
+
+
 
             // ðŸŸ¢ FIX BUG THIáº¾U HEADER: 
             // Náº¿u tab má»›i hoÃ n toÃ n (idMap rá»—ng), chÃ¨n Header lÃªn Ä‘áº§u máº£ng dá»¯ liá»‡u chuáº©n bá»‹ Ä‘áº©y lÃªn
@@ -499,16 +509,19 @@ class GoogleSheetService
     }
 
     /**
-     * Tá»± Ä‘á»™ng tÃ´ mÃ u cáº£ hÃ ng dá»±a trÃªn giÃ¡ trá»‹ cá»§a cá»™t Status
-     * TÃ´ mÃ u theo quy táº¯c linh hoáº¡t
-     * $rules: Máº£ng chá»©a [ 'TÃªn tráº¡ng thÃ¡i' => [mÃ u RGB] ]
+     * Tự động tô màu cả hàng dựa trên giá trị của cột Status
+     * Tô màu theo quy tắc linh hoạt
+     * $rules: Mảng chứa [ 'Tên trạng thái' => [màu RGB] ]
      */
     public function applyFormattingWithRules(string $sheetName, int $statusColIndex, array $rules)
     {
         $sheetId = $this->getSheetIdByName($sheetName);
         $colLetter = chr(65 + $statusColIndex);
 
-        $requests = [];
+        // 1. Lấy danh sách các lệnh XÓA Rule cũ (để tránh tích lũy vô hạn - BUG #2)
+        $requests = $this->getDeleteConditionalFormatRulesRequests($sheetId);
+
+        // 2. Thêm các lệnh THÊM Rule mới
         foreach ($rules as $status => $color) {
             $requests[] = new \Google\Service\Sheets\Request([
                 'addConditionalFormatRule' => [
@@ -529,6 +542,38 @@ class GoogleSheetService
 
         $batchUpdateRequest = new \Google\Service\Sheets\BatchUpdateSpreadsheetRequest(['requests' => $requests]);
         return $this->service->spreadsheets->batchUpdate($this->spreadsheetId, $batchUpdateRequest);
+    }
+
+    /**
+     * Lấy danh sách Request để xóa toàn bộ Conditional Format Rules hiện tại của một Sheet
+     */
+    private function getDeleteConditionalFormatRulesRequests(int $sheetId): array
+    {
+        $spreadsheet = $this->service->spreadsheets->get($this->spreadsheetId);
+        $requests = [];
+
+        foreach ($spreadsheet->getSheets() as $sheet) {
+            if ($sheet->getProperties()->getSheetId() !== $sheetId) {
+                continue;
+            }
+
+            $rules = $sheet->getConditionalFormats() ?? [];
+            $ruleCount = count($rules);
+
+            // Xóa từ cuối lên đầu để index không bị thay đổi trong quá trình xóa (nếu gửi lẻ)
+            // Trong BatchUpdate thì gửi index nào cũng được nhưng làm ngược lại cho an toàn
+            for ($i = $ruleCount - 1; $i >= 0; $i--) {
+                $requests[] = new \Google\Service\Sheets\Request([
+                    'deleteConditionalFormatRule' => [
+                        'index' => $i,
+                        'sheetId' => $sheetId,
+                    ]
+                ]);
+            }
+            break;
+        }
+
+        return $requests;
     }
 
     /**

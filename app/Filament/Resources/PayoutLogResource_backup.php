@@ -16,14 +16,12 @@ use Filament\Infolists;
 use Filament\Infolists\Infolist;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Filament\Forms\Get;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\FontWeight;
-use Filament\Support\Enums\IconPosition;
 use Illuminate\Database\Eloquent\Model;
-use App\Filament\Resources\Shared\ActivitiesRelationManager;
+use Filament\Forms\Get;
 
-class PayoutLogResource extends Resource
+class PayoutLogResource_backup extends Resource
 {
     protected static ?string $model = PayoutLog::class;
 
@@ -52,28 +50,36 @@ class PayoutLogResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
+        // 1. Lấy query gốc (đã bao gồm xử lý SoftDeletes)
         $query = parent::getEloquentQuery()
-            ->withCount('children');
+            ->withCount('children')
+            // 🟢 TỐI ƯU: Chỉ lấy ngày exchange gần nhất thay vì load toàn bộ children vào RAM
+            ->addSelect([
+                'exchanged_at' => \App\Models\PayoutLog::select('created_at')
+                    ->whereColumn('parent_id', 'payout_logs.id')
+                    ->latest()
+                    ->limit(1),
+            ]);
 
         // 2. Khóa chặt thứ tự sắp xếp Cha - Con (Đã fix lỗi SQL Sum cho Sếp)
         $query->orderByRaw('COALESCE(parent_id, id) DESC')->orderBy('id', 'ASC');
 
         $user = auth()->user();
 
-        // 3. KIỂM TRA QUYỀN ADMIN Hoặc FINANCE
-        if ($user?->isAdmin() || $user?->isFinance()) {
+        // 3. KIỂM TRA QUYỀN ADMIN
+        if ($user?->isAdmin()) {
             return $query;
         }
 
-        // 4. CHỐT CHẶN BẢO MẬT CHO STAFF/OPERATOR
-        // Cụ thể: Ẩn các đơn của người khác khỏi Staff
+        // 4. CHỐT CHẶN BẢO MẬT CHO STAFF
+        // Cụ thể: Ẩn transaction currency exchange (đơn con) khỏi Staff
         return $query->where('user_id', $user->id);
     }
 
     // 🟢 KHÓA QUYỀN SỬA ĐỐI VỚI NHÂN VIÊN KHI ĐƠN ĐÃ ĐƯỢC EXCHANGE (CÓ ĐƠN CON)
     public static function canEdit(Model $record): bool
     {
-        if (auth()->user()?->isAdmin() || auth()->user()?->isFinance()) {
+        if (auth()->user()?->isAdmin()) {
             return true;
         }
 
@@ -88,7 +94,7 @@ class PayoutLogResource extends Resource
     // Khóa luôn quyền Xóa nếu đơn đã Exchange để tránh trường hợp xóa chui
     public static function canDelete(Model $record): bool
     {
-        if (auth()->user()?->isAdmin() || auth()->user()?->isFinance()) {
+        if (auth()->user()?->isAdmin()) {
             return true;
         }
 
@@ -184,7 +190,7 @@ class PayoutLogResource extends Resource
                             })
                             ->formatStateUsing(fn(string $state): string => __('system.payment_status.' . $state)),
                         Infolists\Components\TextEntry::make('payoutMethod.name')
-                            ->label(__('system.labels.wallet')) // Đã đổi theo yêu cầu
+                            ->label(__('system.labels.payout_date')) // Tạm dùng hoặc thêm key 'target_wallet'
                             // 🟢 CHỈ HIỆN NẾU LÀ PAYPAL
                             ->visible(fn($record) => $record->asset_type === 'paypal'),
                     ])->columns(2),
@@ -431,7 +437,7 @@ class PayoutLogResource extends Resource
                             }),
 
                         Forms\Components\Select::make('payout_method_id')
-                            ->label(__('system.labels.wallet')) // Đã đổi theo yêu cầu
+                            ->label(__('system.labels.payout_date')) // Tạm dùng
                             ->options(PayoutMethod::pluck('name', 'id')) // Chỉ cần 1 dòng này
                             // 🟢 Ẩn Ví mục tiêu đối với Staff khi chọn PayPal (Gift Card vốn dĩ đã ẩn sẵn)
                             ->hidden(
@@ -451,7 +457,7 @@ class PayoutLogResource extends Resource
 
                         // CHỌN BRAND
                         Forms\Components\Select::make('gc_brand')
-                            ->label(__('system.labels.brand'))
+                            ->label(__('system.labels.platform'))
                             ->placeholder(__('system.payout_logs.fields.select_brand'))
                             ->searchable()
                             ->visible(fn($get) => $get('asset_type') === 'gift_card')
@@ -720,9 +726,10 @@ class PayoutLogResource extends Resource
                 // Account Email - Platform
                 Tables\Columns\TextColumn::make('account_id')
                     ->label(__('system.labels.account_email'))
-                    ->alignment(Alignment::Center)
-                    //->extraHeaderAttributes(['style' => 'width: 200px; min-width: 200px'])
-                    //->extraAttributes(['style' => 'width: 200px; min-width: 200px'])
+                    ->alignment(Alignment::Start)
+                    ->extraHeaderAttributes(['style' => 'width: 200px; min-width: 200px'])
+                    ->extraAttributes(['style' => 'width: 200px; min-width: 200px'])
+                    ->extraHeaderAttributes(['class' => 'centered-header'])
                     ->copyable()
                     ->copyMessage(__('system.payout_logs.messages.copied'))
                     ->wrap()
@@ -767,9 +774,6 @@ class PayoutLogResource extends Resource
                     ->copyable()
                     ->copyMessage('Copied to clipboard!')
                     ->wrap()
-                    ->icon(fn($record): ?string => $record->asset_type === 'gift_card' ? 'heroicon-m-clipboard-document' : null)
-                    ->iconColor('warning')
-                    ->iconPosition(IconPosition::After)
                     ->html() // Cho phép xuống dòng bằng thẻ <br>
                     // 🟢 PHẢI CÓ: Ngăn sự kiện click bị trôi ra ngoài hàng (Row)
                     // 🟢 FIX 1: Thêm attribute để wrapper bao quanh toàn bộ cell
@@ -796,7 +800,7 @@ class PayoutLogResource extends Resource
                                             <span style='color: #6b7280; display: inline-block;'>PayPal Withdrawal:</span> 
                                             <strong style='color: #111827;'>$walletName</strong>
                                         </div>
-                                    </div>";
+                                    <div>";
                         }
 
                         // Định dạng cho Gift Card theo ý bạn
@@ -832,76 +836,45 @@ class PayoutLogResource extends Resource
                                     </div>
                                 </div>
                             ";
-                    }),
-
-                Tables\Columns\TextColumn::make('transaction_type')
-                    ->label(__('system.labels.transaction_type'))
-                    ->alignment(Alignment::Center)
-                    ->formatStateUsing(fn(string $state): string => __('system.payout_logs.transaction_types.' . $state))
+                    })
+                    // 🟢 HIỆN ICON: Chỉ hiện nếu là Gift Card
+                    ->icon(fn($record) => $record->asset_type === 'gift_card' ? 'heroicon-m-clipboard-document' : null)
+                    // 🟢 MÀU ICON: Chỉ icon màu vàng, chữ vẫn giữ màu mặc định
+                    ->iconColor('warning')
+                    // 🟢 ĐƯA ICON SANG BÊn TRÁI
                     ->description(function ($record): ?\Illuminate\Support\HtmlString {
                         if ($record->transaction_type === 'liquidation')
                             return null;
 
-                        // 🔴 NUCLEAR FIX: Truy vấn trực tiếp từ quan hệ để đảm bảo luôn có ngày
-                        $exDate = $record->children()->where('status', 'completed')->latest()->value('created_at')
-                            ?? $record->updated_at;
+                        // TỔNG TIỀN ĐÃ ĐỔI: Tính tổng các đơn con Compledted
+                        $liquidatedAmount = $record->children()->where('status', 'completed')->sum('amount_usd') ?? 0;
+                        $isFullyExchanged = $liquidatedAmount >= $record->net_amount_usd;
 
-                        $dateSuffix = '';
-                        if ($exDate) {
-                            try {
-                                $dateSuffix = ' ' . \Carbon\Carbon::parse($exDate)->format('d/m/Y');
-                            } catch (\Exception $e) {
-                                // Bỏ qua nếu lỗi format
-                            }
-                        }
-
-                        // 🟢 LOGIC CHO PAYPAL: Dựa trên số dư Ví
-                        if ($record->asset_type === 'paypal') {
-                            $method = $record->payoutMethod;
-                            $balance = $method ? $method->current_balance : 0;
-
-                            if ($balance <= 0) {
+                        $isAdmin = auth()->user()?->isAdmin();
+                        if (!$isFullyExchanged) {
+                            if ($isAdmin) {
                                 return new \Illuminate\Support\HtmlString(
-                                    '<div style="color: #6b7280; font-size: 11px; font-weight: bold; margin-top: 2px;">(Exchanged!' . ($dateSuffix ?: '') . ')</div>'
+                                    '<span style="color: #FF9F40; font-weight: bold; cursor: pointer; display: block; margin-top: 4px;">' . __('system.actions.exchange_to_vnd') . '</span>'
                                 );
                             }
-                        } else {
-                            // 🟢 LOGIC CHO GIFT CARD: Cho phép quy đổi từng phần
-                            $liquidated = $record->children()->where('status', 'completed')->sum('amount_usd') ?? 0;
-                            if ($record->net_amount_usd - $liquidated <= 0.01) {
-                                return new \Illuminate\Support\HtmlString(
-                                    '<div style="color: #6b7280; font-size: 11px; font-weight: bold; margin-top: 2px;">(Exchanged!' . ($dateSuffix ?: '') . ')</div>'
-                                );
-                            }
+                            return null;
                         }
 
-                        // Nếu chưa quy đổi hết: Hiện nút bấm (Chỉ Admin & Finance)
-                        if (auth()->user()?->isAdmin() || auth()->user()?->isFinance()) {
+                        // Nếu đã bán rồi, có thể hiện nhãn "Đã thanh khoản" màu xám nhẹ cho chuyên nghiệp
+                        if ($record->children_count > 0) {
+                            $childDate = '';
+                            if ($record->exchanged_at) {
+                                $childDate = ' ' . \Carbon\Carbon::parse($record->exchanged_at)->format('d/m/Y');
+                            }
                             return new \Illuminate\Support\HtmlString(
-                                '<span style="color: #FF9F40; font-weight: bold; cursor: pointer; display: block; margin-top: 4px;">' . __('system.payout_logs.actions.exchange_to_vnd') . '</span>'
+                                '<span style="color: #94a3b8; font-size: 11px;">' . __('system.payout_logs.messages.exchanged') . $childDate . '</span>'
                             );
                         }
-
                         return null;
                     })
                     ->extraAttributes(function ($record) {
-                        $isPrivileged = auth()->user()?->isAdmin() || auth()->user()?->isFinance();
-                        if (!$isPrivileged || !in_array($record->transaction_type, ['withdrawal', 'hold'])) {
-                            return [];
-                        }
-
-                        // Kiểm tra xem có cần thanh khoản nữa không
-                        $canExchange = false;
-                        if ($record->asset_type === 'paypal') {
-                            $method = $record->payoutMethod;
-                            $canExchange = $method && $method->current_balance > 0;
-                        } else {
-                            // Gift Card: Cho đổi nếu chưa đổi hết
-                            $liquidated = $record->children()->where('status', 'completed')->sum('amount_usd') ?? 0;
-                            $canExchange = ($record->net_amount_usd - $liquidated) > 0.01;
-                        }
-
-                        if ($canExchange) {
+                        // 🟢 FIX N+1: Chặn click nếu đã bán rồi và chỉ Admin mới được bấm
+                        if (auth()->user()?->isAdmin() && in_array($record->transaction_type, ['withdrawal', 'hold']) && $record->children_count === 0) {
                             return [
                                 'class' => 'cursor-pointer transition hover:opacity-70',
                                 'wire:click.stop' => "mountTableAction('currency_exchange', '{$record->id}')",
@@ -928,7 +901,7 @@ class PayoutLogResource extends Resource
                 Tables\Columns\TextColumn::make('total_vnd')
                     ->label(__('system.labels.total_vnd'))
                     ->placeholder('N/A')
-                    ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()) // 🟢 HIỆN CHO ADMIN & FINANCE
+                    ->visible(fn() => auth()->user()?->isAdmin()) // 🟢 ẨN KHỎI NHÂN VIÊN
                     ->numeric(0, ',', '.')
                     ->prefix('₫')
                     ->alignment(Alignment::Center)
@@ -1003,7 +976,7 @@ class PayoutLogResource extends Resource
                 // Only shows Users who are actually linked to the logs in the list
                 Tables\Filters\SelectFilter::make('user_id')
                     ->label(__('system.labels.user'))
-                    ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()) // 🟢 HIỆN CHO ADMIN & FINANCE
+                    ->visible(fn() => auth()->user()?->isAdmin()) // 🟢 ẨN KHỎI NHÂN VIÊN
                     ->options(
                         fn() => \App\Models\User::query()
                             ->whereIn('id', \App\Models\PayoutLog::distinct()->pluck('user_id'))
@@ -1097,8 +1070,8 @@ class PayoutLogResource extends Resource
             ])
             // THÊM DÒNG NÀY ĐỂ ĐƯA FILTER RA NGOÀI:
             ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContent)
-            // 🟢 THAY ĐỔI DÒNG NÀY: Admin & Finance hiện 4 cột, Staff hiện 3 cột
-            ->filtersFormColumns(auth()->user()?->isAdmin() || auth()->user()?->isFinance() ? 4 : 3) // QUAN TRỌNG: Tổng Layout là 3 cột (Status [1] + Date [2] = 3)
+            // 🟢 THAY ĐỔI DÒNG NÀY: Admin hiện 3 cột, Staff hiện 5 cột
+            ->filtersFormColumns(auth()->user()?->isAdmin() ? 4 : 3) // QUAN TRỌNG: Tổng Layout là 3 cột (Status [1] + Date [2] = 3)
             ->actions([
                 //Nút Exchange to VND ở cột Transaction Type
                 Tables\Actions\Action::make('currency_exchange')
@@ -1111,41 +1084,14 @@ class PayoutLogResource extends Resource
                     ->tooltip('Exchange to VND')
                     ->modalHeading('Currency Exchange (Sell to VND)')
                     ->modalWidth('md')
-                    ->mountUsing(function (Forms\ComponentContainer $form, $record) {
-                        // MẶC ĐỊNH: Lấy số dư thực tế còn lại
-                        $initialAmount = $record->net_amount_usd;
-
-                        if ($record->asset_type === 'paypal') {
-                            // PayPal: Lấy số dư tổng của Ví đó
-                            $initialAmount = $record->payoutMethod?->current_balance ?? $record->net_amount_usd;
-                        } else {
-                            // Gift Card: Lấy số tiền chưa thanh khoản của chính đơn này
-                            $liquidated = $record->children()->where('status', 'completed')->sum('amount_usd') ?? 0;
-                            $initialAmount = max(0, $record->net_amount_usd - $liquidated);
-                        }
-
-                        return $form->fill([
-                            'net_amount_usd' => round($initialAmount, 2),
-                            'exchange_rate' => 20000, // Mặc định tỷ giá
-                            'total_vnd' => $initialAmount * 20000,
-                        ]);
-                    })
+                    ->mountUsing(fn(Forms\ComponentContainer $form, $record) => $form->fill([
+                        'net_amount_usd' => $record->net_amount_usd, // Lấy sẵn số tiền từ dòng gốc
+                        'exchange_rate' => 20000,
+                        'total_vnd' => $record->net_amount_usd * 20000,
+                    ]))
 
                     // 🟢 Bỏ check diffInDays, chỉ cần là withdrawal, hold là cho hiện (Chỉ Admin)
-                    ->visible(function ($record) {
-                        if (!auth()->user()?->isAdmin() && !auth()->user()?->isFinance())
-                            return false;
-                        if (!in_array($record->transaction_type, ['withdrawal', 'hold']))
-                            return false;
-
-                        if ($record->asset_type === 'paypal') {
-                            return ($record->payoutMethod?->current_balance ?? 0) > 0.01;
-                        }
-
-                        // Gift Card: Kiểm tra số tiền còn lại
-                        $liquidated = $record->children()->where('status', 'completed')->sum('amount_usd') ?? 0;
-                        return ($record->net_amount_usd - $liquidated) > 0.01;
-                    })
+                    ->visible(fn($record) => auth()->user()?->isAdmin() && in_array($record->transaction_type, ['withdrawal', 'hold']))
                     ->form([
                         Forms\Components\TextInput::make('net_amount_usd')
                             ->label(__('system.labels.net_usd'))
@@ -1154,42 +1100,8 @@ class PayoutLogResource extends Resource
                             ->default(fn($record) => $record->amount_usd)
                             ->required()
                             ->live()
-                            // 🟢 HIỆN SỐ DƯ TỨC THÌ: Giúp sếp theo dõi ví khi đang gõ
-                            ->helperText(function ($get, $record) {
-                                if ($record->asset_type !== 'paypal')
-                                    return null;
-
-                                $currentWalletBalance = $record->payoutMethod?->current_balance ?? 0;
-                                $inputAmount = (float) $get('net_amount_usd');
-                                $remaining = $currentWalletBalance - $inputAmount;
-
-                                $color = $remaining < 0 ? 'text-danger-600' : 'text-success-600';
-                                $remainingStr = number_format($remaining, 2);
-                                $walletStr = number_format($currentWalletBalance, 2);
-
-                                return new \Illuminate\Support\HtmlString(
-                                    "Wallet: <span class='font-bold'>\${$walletStr}</span> | " .
-                                    "Remaining: <span class='font-bold {$color}'>\${$remainingStr}</span>"
-                                );
-                            })
-                            // Khi thay đổi USD, tính lại VND và kiểm tra số dư
-                            ->afterStateUpdated(function ($set, $get, $record, $state) {
-                                if ($record->asset_type === 'paypal') {
-                                    $balance = $record->payoutMethod?->current_balance ?? 0;
-                                    if ((float) $state > $balance) {
-                                        // 🟢 BÁO ĐỎ VỀ 0: Chặn số tiền vượt quá ví
-                                        $set('net_amount_usd', 0);
-                                        $set('total_vnd', 0);
-                                        // Thêm thông báo nhẹ cho sếp
-                                        \Filament\Notifications\Notification::make()
-                                            ->title(__('system.payout_logs.messages.balance_exceeded', ['balance' => $balance, 'limit' => $balance]))
-                                            ->danger()
-                                            ->send();
-                                        return;
-                                    }
-                                }
-                                self::calculateVnd($set, $get);
-                            }),
+                            // Khi thay đổi USD, tính lại VND
+                            ->afterStateUpdated(fn($set, $get) => self::calculateVnd($set, $get)),
 
                         Forms\Components\TextInput::make('exchange_rate')
                             ->label(__('system.labels.exchange_rate'))
@@ -1199,7 +1111,7 @@ class PayoutLogResource extends Resource
                             //->mask('99.999') // Dấu chấm ở đây chỉ là hiển thị
                             ->suffix('VNĐ/$')
                             ->required()
-                            ->live(onBlur: true) // FIX: Dùng onBlur để tránh bị xóa nhảy số khi đang gõ
+                            ->live() // Bỏ onBlur để tính toán ngay khi đang gõ
                             ->afterStateUpdated(fn($set, $get) => self::calculateVnd($set, $get))
                             // Hiện gợi ý bên dưới để check lại số nghìn/triệu
                             ->helperText(fn($state) => $state ? 'Typing: ' . number_format((float) $state, 0, ',', '.') . ' VNĐ' : null),
@@ -1269,7 +1181,7 @@ class PayoutLogResource extends Resource
                         ->label('Export to Google Sheet')
                         ->icon('heroicon-o-table-cells')
                         ->color('success')
-                        ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance())
+                        ->visible(fn() => auth()->user()?->isAdmin())
                         ->requiresConfirmation()
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records, \App\Services\GoogleSyncService $syncService) {
                             try {
@@ -1309,7 +1221,7 @@ class PayoutLogResource extends Resource
                         ->label('Settle & Generate Payment') // Chốt sổ & Tạo phiếu thanh toán
                         ->icon('heroicon-o-calculator')
                         ->color('warning')
-                        ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()) // Admin & Finance
+                        ->visible(fn() => auth()->user()?->isAdmin()) // Chỉ Admin
                         ->requiresConfirmation()
                         ->form([
                             Forms\Components\TextInput::make('manual_payout_rate')
@@ -1379,32 +1291,25 @@ class PayoutLogResource extends Resource
 
                                 // 🟢 QUÉT TỪNG ĐƠN GỐC ĐỂ TÍNH TIỀN
                                 foreach ($logs as $log) {
-                                    // 🟢 LẤY TẤT CẢ CON THANH KHOẢN (LIQUIDATION) - Fix lỗi hụt tiền thanh khoản từng phần
-                                    $liquidationChildren = $log->children()
-                                        ->where('transaction_type', 'liquidation')
-                                        ->where('status', 'completed')
-                                        ->get();
+                                    $exchangedChild = $log->children()
+                                        ->whereNotNull('exchange_rate')
+                                        ->where('exchange_rate', '>', 0)
+                                        ->latest()
+                                        ->first();
 
-                                    $usd = 0;
-                                    $vndMarket = 0;
+                                    $targetRecord = $exchangedChild ? $exchangedChild : $log;
 
-                                    if ($liquidationChildren->isNotEmpty()) {
-                                        $usd = (float) $liquidationChildren->sum('net_amount_usd');
-                                        $vndMarket = (float) $liquidationChildren->sum('total_vnd');
-
-                                        // Lưu lại hết IDs con để chốt sổ (không cho thanh khoản nữa)
-                                        foreach ($liquidationChildren as $child) {
-                                            $childIdsToUpdate[] = $child->id;
-                                        }
-                                    } else {
-                                        // Nếu chưa thanh khoản (Fallback - hiếm khi xảy ra)
-                                        $usd = (float) $log->net_amount_usd;
-                                        $vndMarket = (float) $log->total_vnd; // Nếu sếp không thanh khoản thì thường = 0
-                                    }
+                                    $usd = $targetRecord->net_amount_usd > 0 ? $targetRecord->net_amount_usd : $log->net_amount_usd;
+                                    $marketRate = $targetRecord->exchange_rate ?? 0;
+                                    $vndMarket = $targetRecord->total_vnd > 0 ? $targetRecord->total_vnd : ($usd * $marketRate);
 
                                     $totalUsd += $usd;
                                     $totalVndMarket += $vndMarket;
+
                                     $parentIdsToUpdate[] = $log->id;
+                                    if ($exchangedChild) {
+                                        $childIdsToUpdate[] = $exchangedChild->id;
+                                    }
                                 }
 
                                 // Tính tỷ giá thị trường trung bình
@@ -1417,9 +1322,8 @@ class PayoutLogResource extends Resource
                                 // Tiền thực trả = (Số lượng USD * Tỷ giá chi trả) * (% chi trả / 100)
                                 $totalVndPayout = floor(($totalUsd * $payoutRate) * ($payoutPercentage / 100));
 
-                                // Profit của Gin = (Tỷ giá thanh khoản - Tỷ giá trả user) * (Số lượng USD * % chi trả)
-                                // Công thức: (MarketRate - PayoutRate) * TotalUSD * (PayoutPercentage / 100)
-                                $profitVnd = floor(($averageMarketRate - $payoutRate) * $totalUsd * ($payoutPercentage / 100));
+                                // Lợi nhuận = Tiền thực nhận về - Tiền thực trả cho User
+                                $profitVnd = $totalVndMarket - $totalVndPayout;
 
                                 // 4. TẠO PHIẾU LƯƠNG
                                 $payment = \App\Models\UserPayment::create([
@@ -1512,7 +1416,7 @@ class PayoutLogResource extends Resource
     public static function getRelations(): array
     {
         return [
-            ActivitiesRelationManager::class,
+            //
         ];
     }
 

@@ -23,6 +23,10 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 
+.claude/
+.cursor/
+.windsurf/
+
 # Google Sheets credentials
 /storage/app/google-auth.json
 .gitnexus

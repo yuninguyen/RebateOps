@@ -44,9 +44,25 @@ class AccountResource extends Resource
     // Đổi sang icon chứng minh thư/tài khoản
     protected static ?string $navigationIcon = 'heroicon-o-identification';
 
-    // Thêm dòng này để gom vào cùng nhóm với Email
-    protected static ?string $navigationGroup = 'RESOURCE HUB';
-    protected static ?string $navigationLabel = 'All Platforms';
+    public static function getNavigationGroup(): ?string
+    {
+        return 'resource_hub';
+    }
+    protected static ?string $navigationLabel = '';
+    public static function getNavigationLabel(): string
+    {
+        return __('system.all_platforms');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('system.all_platforms');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('system.all_platforms_list');
+    }
 
     // Thêm dòng này để Account nằm dưới Email
     protected static ?int $navigationSort = 2;
@@ -55,15 +71,15 @@ class AccountResource extends Resource
     {
         $query = parent::getEloquentQuery();
 
-        // Admin được xem toàn bộ
-        if (auth()->user()?->isAdmin()) {
+        // Admin & Finance được xem toàn bộ
+        if (auth()->user()?->isAdmin() || auth()->user()?->isFinance()) {
             return $query;
         }
 
         // Staff chỉ xem được account của chính họ hoặc account chưa gán cho ai
         return $query->where(function (Builder $q) {
             $q->where('user_id', auth()->id())
-              ->orWhereNull('user_id');
+                ->orWhereNull('user_id');
         });
     }
 

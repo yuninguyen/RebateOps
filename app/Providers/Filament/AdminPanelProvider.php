@@ -19,6 +19,7 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\Facades\Blade;
+use Filament\Navigation\NavigationGroup;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -33,7 +34,8 @@ class AdminPanelProvider extends PanelProvider
 
             // 🎨 BRANDING
             ->brandName('RebateOps')
-            ->brandLogo(fn () => file_exists(public_path('images/logo.png'))
+            ->brandLogo(
+                fn() => file_exists(public_path('images/logo.png'))
                 ? asset('images/logo.png')
                 : new \Illuminate\Support\HtmlString('
                     <div style="display: flex; align-items: center; justify-content: flex-start; gap: 10px;">
@@ -49,12 +51,6 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogoHeight('32px')
             ->favicon(asset('favicon.ico'))
 
-            // 🗂️ NAVIGATION GROUPS
-            ->navigationGroups([
-                'RESOURCE HUB',
-                'WORKING SPACE',
-                'WALLET & PAYOUTS',
-            ])
             ->sidebarCollapsibleOnDesktop()
 
             // 🎨 COLOR PALETTE — Refined tones
@@ -62,10 +58,10 @@ class AdminPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Amber,
                 'success' => Color::Emerald,
-                'danger'  => Color::Red,
+                'danger' => Color::Red,
                 'warning' => Color::Orange,
-                'info'    => Color::Sky,
-                'gray'    => Color::Slate,
+                'info' => Color::Sky,
+                'gray' => Color::Slate,
             ])
 
             // 📦 RESOURCES & PAGES
@@ -85,6 +81,21 @@ class AdminPanelProvider extends PanelProvider
                 \App\Filament\Widgets\EmailStatusChart::class,
                 Widgets\FilamentInfoWidget::class,
                 \App\Filament\Widgets\PayoutStats::class,
+                \App\Filament\Widgets\AdminUserEarningsTable::class,
+            ])
+
+            // 🗂️ SIDEBAR GROUP ORDERING (Strict machine-name keys)
+            ->navigationGroups([
+                'resource_hub' => NavigationGroup::make()
+                    ->label(__('system.nav.resource_hub')),
+                'working_space' => NavigationGroup::make()
+                    ->label(__('system.nav.working_space')),
+                'wallet_payout' => NavigationGroup::make()
+                    ->label(__('system.nav.wallet_payouts')),
+                'settings' => NavigationGroup::make()
+                    ->label(__('system.nav.settings')),
+                'logs' => NavigationGroup::make()
+                    ->label(__('system.nav.logs')),
             ])
 
             // 🔒 MIDDLEWARE
@@ -106,7 +117,7 @@ class AdminPanelProvider extends PanelProvider
             // 🎨 THEME CSS — Inject professional stylesheet
             ->renderHook(
                 'panels::styles.after',
-                fn (): string => Blade::render('
+                fn(): string => Blade::render('
                     <link rel="preconnect" href="https://fonts.googleapis.com">
                     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
                     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -120,7 +131,7 @@ class AdminPanelProvider extends PanelProvider
         // 🟢 CLIPBOARD POLYFILL (Giữ lại JS thiết yếu duy nhất)
         FilamentView::registerRenderHook(
             'panels::body.end',
-            fn (): string => '
+            fn(): string => '
             <script>
             // Clipboard polyfill for HTTP
             if (!navigator.clipboard) {

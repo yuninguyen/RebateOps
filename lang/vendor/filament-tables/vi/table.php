@@ -50,11 +50,11 @@ return [
 
     'summary' => [
 
-        'heading' => 'Tóm tắt',
+        'heading' => 'Tổng cộng',
 
         'subheadings' => [
             'all' => 'Tất cả :label',
-            'group' => 'Tóm tắt :group',
+            'group' => 'Tổng:  :group',
             'page' => 'Trang này',
         ],
 

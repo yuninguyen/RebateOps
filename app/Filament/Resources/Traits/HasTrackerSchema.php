@@ -36,13 +36,13 @@ trait HasTrackerSchema
         return $form
             ->schema([
                 // SECTION 1: Account & Platform
-                Forms\Components\Section::make('Account & Platform')
+                Forms\Components\Section::make(__('system.account_claim.section_title'))
                     ->schema([
                         Forms\Components\Grid::make(12)
                             ->schema([
                                 // 1. USER (Chỉ Admin thấy)
                                 Forms\Components\Select::make('user_id')
-                                    ->label('User')
+                                    ->label(__('system.labels.user'))
                                     ->relationship('user', 'name')
                                     ->default(fn() => auth()->id())
                                     ->hidden(fn() => !auth()->user()?->isAdmin())
@@ -60,7 +60,7 @@ trait HasTrackerSchema
 
                                 // 2. SELECT PLATFORM (Làm nhỏ lại cho Staff)
                                 Forms\Components\Select::make('platform')
-                                    ->label('Platform')
+                                    ->label(__('system.labels.platform'))
                                     ->options(self::getPlatforms())
                                     ->options(function (Forms\Get $get, $record) {
                                         $userId = $get('user_id') ?? $record?->user_id;
@@ -91,35 +91,39 @@ trait HasTrackerSchema
 
                                 // 3. SELECT EMAIL (Chiếm không gian lớn nhất cho Staff)
                                 Forms\Components\Select::make('account_email')
-                                    ->label('Select Account Email')
+                                    ->label(__('system.labels.select_account_email'))
                                     ->options(function ($get, $record) {
                                         $userId = $get('user_id') ?? $record?->user_id;
                                         $platform = $get('platform') ?? $record?->account?->platform;
                                         if (!$userId || !$platform)
                                             return [];
 
-                                        return \App\Models\Account::where('user_id', $userId)
+                                        return \App\Models\Account::query()
+                                            ->where('user_id', $userId)
                                             ->where('platform', $platform)
-                                            ->with('email')
+                                            ->select(['id', 'email_id', 'user_id', 'platform'])
+                                            ->with('email:id,email')
                                             ->withSum(['rebateTrackers as pending_amount' => fn($q) => $q->whereIn('status', ['pending', 'clicked'])], 'rebate_amount')
                                             ->withSum(['rebateTrackers as confirmed_amount' => fn($q) => $q->whereIn('status', ['confirmed'])], 'rebate_amount')
                                             ->withSum(['payoutLogs as paid_amount' => fn($q) => $q->whereIn('transaction_type', ['withdrawal', 'hold'])->where('status', 'completed')], 'amount_usd')
                                             ->get()
                                             ->mapWithKeys(function ($account) {
                                                 $pending = number_format($account->pending_amount ?? 0, 2);
+                                                $paid = number_format($account->paid_amount ?? 0, 2);
                                                 $available = number_format(max(0, ($account->confirmed_amount ?? 0) - ($account->paid_amount ?? 0)), 2);
                                                 $email = $account->email?->email ?? 'N/A';
-                                                return [$email => "{$email} ➔ [Pending: \${$pending}] - [Confỉmmed: \${$available}]"];
+                                                return [$email => "{$email} - \${$paid} ➔ [Pending: \${$pending}] - [Confirmed: \${$available}]"];
                                             });
                                     })
                                     ->searchable()
+                                    ->preload()
                                     ->live()
                                     ->required()
                                     ->suffixAction(
                                         Forms\Components\Actions\Action::make('copyEmail')
                                             ->icon('heroicon-m-clipboard-document')
                                             ->color('warning')
-                                            ->tooltip('Copy Email')
+                                            ->tooltip(__('system.actions.copy') . ' Email')
                                             ->action(function (Forms\Get $get, $livewire) {
                                                 $email = $get('account_email');
 
@@ -128,7 +132,7 @@ trait HasTrackerSchema
                                                     $livewire->dispatch('copy-to-clipboard', text: $email);
 
                                                     \Filament\Notifications\Notification::make()
-                                                        ->title('Email Copied!')
+                                                        ->title(__('system.labels.email_copied'))
                                                         ->success()
                                                         ->send();
                                                 }
@@ -154,7 +158,7 @@ trait HasTrackerSchema
 
                                 // 4. SHOW PASSWORD (Làm nhỏ lại cho Staff)
                                 Forms\Components\TextInput::make('account_password_display')
-                                    ->label('Password')
+                                    ->label(__('system.labels.password'))
                                     ->readonly()
                                     ->password()
                                     ->revealable()
@@ -172,7 +176,7 @@ trait HasTrackerSchema
                                                     $livewire->dispatch('copy-to-clipboard', text: $password);
 
                                                     \Filament\Notifications\Notification::make()
-                                                        ->title('Copied!')
+                                                        ->title(__('system.labels.copied'))
                                                         ->success()
                                                         ->send();
                                                 }
@@ -184,17 +188,17 @@ trait HasTrackerSchema
 
                         // PHẦN HIỂN THỊ TRẠNG THÁI (Giữ nguyên logic của Sếp)
                         Forms\Components\Placeholder::make('account_status_display')
-                            ->label('Account Status Tracking')
+                            ->label(__('system.labels.account_status_tracking'))
                             ->visible(fn($get) => $get('account_email'))
                             ->content(function ($get) {
                                 // ... (Giữ nguyên toàn bộ nội dung HtmlString bên trong của Sếp)
                                 $emailState = $get('account_email');
                                 $account = \App\Models\Account::whereHas('email', fn($q) => $q->where('email', $emailState))->first();
                                 if (!$account)
-                                    return new \Illuminate\Support\HtmlString("<div class='text-danger'>⚠️ No account found</div>");
+                                    return new \Illuminate\Support\HtmlString("<div class='text-danger'>⚠️ " . __('system.notifications.no_records_found') . "</div>");
                                 $statuses = (array) $account->status;
                                 if (empty($statuses))
-                                    return "No status available.";
+                                    return __('system.n/a');
                                 $htmlResult = collect($statuses)->map(function ($status, $index) use ($statuses) {
                                     $color = match ($status) {
                                         'active' => '#6b7280',
@@ -206,13 +210,15 @@ trait HasTrackerSchema
                                         default => '#6b7280'
                                     };
                                     $label = match ($status) {
-                                        'used' => 'In Use',
-                                        'limited' => 'PayPal Limited',
-                                        'linked' => 'Linked PayPal',
-                                        'unlinked' => 'Unlinked PayPal',
-                                        'not_linked' => 'Not Linked to PayPal',
-                                        'no_paypal_needed' => 'No PayPal Required',
-                                        default => ucfirst(str_replace('_', ' ', (string) $status))
+                                        'active' => __('system.status.active'),
+                                        'used' => __('system.status.used'),
+                                        'no_paypal_needed' => __('system.status.no_paypal_required'),
+                                        'not_linked' => __('system.status.not_linked_paypal'),
+                                        'unlinked' => __('system.status.unlinked_paypal'),
+                                        'linked' => __('system.status.linked_paypal'),
+                                        'limited' => __('system.status.paypal_limited'),
+                                        'banned' => __('system.status.banned'),
+                                        default => __('system.status.' . $status)
                                     };
                                     $arrow = ($index < count($statuses) - 1) ? " <span style='color: #d1d5db; margin: 0 4px;'>→</span> " : "";
                                     return "<span style='color: {$color}; font-weight: 800; font-size: 0.85rem;'>{$label}</span>{$arrow}";
@@ -227,12 +233,12 @@ trait HasTrackerSchema
                     ->columns(auth()->user()?->isAdmin() ? 2 : 1),
 
                 // SECTION 2: Order Details
-                Forms\Components\Section::make('Order Details & Rebate')
+                Forms\Components\Section::make(__('system.rebate_tracker.order_detail'))
                     ->schema([
                         Forms\Components\Grid::make(3)
                             ->schema([
                                 Forms\Components\DatePicker::make('transaction_date')
-                                    ->label('Transaction date')
+                                    ->label(__('system.labels.transaction_date'))
                                     ->placeholder('dd/mm/yyyy')
                                     ->displayFormat('d/m/Y')
                                     ->format('Y-m-d') // Định dạng chuẩn để lưu vào MySQL
@@ -244,7 +250,7 @@ trait HasTrackerSchema
                                     ->columns(5), // Đảm bảo không tự động lấy ngày hiện tại
 
                                 Forms\Components\DatePicker::make('payout_date')
-                                    ->label('Payout date')
+                                    ->label(__('system.labels.payout_date'))
                                     ->placeholder('dd/mm/yyyy')
                                     ->displayFormat('d/m/Y')
                                     ->format('Y-m-d') // Định dạng chuẩn để lưu vào MySQL
@@ -253,20 +259,20 @@ trait HasTrackerSchema
                                     // Logic Validation: Phải sau hoặc bằng ngày giao dịch
                                     ->after('transaction_date')
                                     ->validationMessages([
-                                        'after' => 'The payout date must not be before the transaction date.'
+                                        'after' => __('system.notifications.date_updated_sync') // Tạm dùng key này hoặc tạo mới
                                     ])
                                     ->nullable() // Cho phép để trống
                                     ->default(null)
                                     ->columns(5), // Đảm bảo không tự động lấy ngày hiện tại
 
                                 Forms\Components\Select::make('status')
-                                    ->label('Status')
+                                    ->label(__('system.labels.status'))
                                     ->options([
-                                        'pending' => 'Pending',
-                                        'confirmed' => 'Confirmed',
-                                        'ineligible' => 'Ineligible',
-                                        'missing' => 'Missing',
-                                        'clicked' => 'Clicked / Ordered',
+                                        'pending' => __('system.status.pending'),
+                                        'confirmed' => __('system.status.confirmed'),
+                                        'ineligible' => __('system.status.ineligible'),
+                                        'missing' => __('system.status.missing'),
+                                        'clicked' => __('system.status.clicked'),
                                     ])
                                     ->default('clicked')
                                     ->required(),
@@ -274,28 +280,28 @@ trait HasTrackerSchema
                         Forms\Components\Grid::make(5)
                             ->schema([
                                 Forms\Components\TextInput::make('store_name')
-                                    ->label('Store Name')
+                                    ->label(__('system.labels.store_name'))
                                     ->required(),
 
                                 Forms\Components\TextInput::make('order_id')
-                                    ->label('Order ID (#)'),
+                                    ->label(__('system.labels.order_id')),
 
                                 Forms\Components\TextInput::make('order_value')
-                                    ->label('Order value ($)')
+                                    ->label(__('system.labels.order_value'))
                                     ->numeric()
                                     ->prefix('$')
                                     ->reactive()
                                     ->required(),
 
                                 Forms\Components\TextInput::make('cashback_percent')
-                                    ->label('% Cashback')
+                                    ->label(__('system.labels.cashback_percent'))
                                     ->numeric()
                                     ->suffix('%')
                                     ->reactive()
                                     ->default(10),
 
                                 Forms\Components\Placeholder::make('rebate_amount_display')
-                                    ->label('Rebate Amount ($)')
+                                    ->label(__('system.labels.rebate_amount'))
                                     ->content(function ($get) {
                                         $total = (float) $get('order_value') * ((float) $get('cashback_percent') / 100);
                                         return '$ ' . number_format($total, 2);
@@ -305,24 +311,24 @@ trait HasTrackerSchema
                     ])->columnSpanFull(),
 
                 // SECTION 3: Logistics
-                Forms\Components\Section::make('Logistics & Note')
+                Forms\Components\Section::make(__('system.labels.note'))
                     ->schema([
                         Forms\Components\Grid::make(2)
                             ->schema([
                                 Forms\Components\TextInput::make('device')
-                                    ->label('Device')
+                                    ->label(__('system.labels.device'))
                                     ->placeholder('iOS, VMware, BitBrowser Antidetect...'),
                                 Forms\Components\Select::make('state')
-                                    ->label('State (US)')
+                                    ->label(__('system.labels.state_us'))
                                     ->searchable()
                                     ->options(self::$usStates),
                             ]),
                         Forms\Components\Textarea::make('note')
-                            ->label('Note')
+                            ->label(__('system.labels.note'))
                             ->columnSpanFull()
                             ->rows(5),
                         Forms\Components\Textarea::make('detail_transaction')
-                            ->label('Transaction Details')
+                            ->label(__('system.labels.transaction_details'))
                             ->columnSpanFull()
                             ->rows(5),
                     ])->columnSpanFull(),
@@ -334,28 +340,28 @@ trait HasTrackerSchema
         return $infolist
             ->schema([
                 // PHẦN 1: EMAIL INFORMATION
-                \Filament\Infolists\Components\Section::make('Account & Platform')
+                \Filament\Infolists\Components\Section::make(__('system.account_claim.section_title'))
                     ->schema([
                         \Filament\Infolists\Components\TextEntry::make('account.email.email')
-                            ->label('Email Address')
+                            ->label(__('system.labels.email_address'))
                             ->placeholder('N/A')
                             ->copyable(), // Cho phép click để copy nhanh
                         // Password (Lấy từ quan hệ: account -> password)
                         \Filament\Infolists\Components\TextEntry::make('account.password')
-                            ->label('Password')
+                            ->label(__('system.labels.password'))
                             ->placeholder('N/A'),
                         // Platform (Lấy từ quan hệ: account -> platform)
                         \Filament\Infolists\Components\TextEntry::make('account.platform')
-                            ->label('Platform')
+                            ->label(__('system.labels.platform'))
                             ->placeholder('N/A')
                             ->formatStateUsing(fn($state) => $state ? (\App\Models\Platform::where('slug', $state)->value('name') ?? $state) : 'N/A'),
                         // User (Để hiện tên thay vì ID số 1)
                         \Filament\Infolists\Components\TextEntry::make('user.name')
-                            ->label('User')
+                            ->label(__('system.labels.user'))
                             ->placeholder('N/A'),
                         // Status (Đảm bảo đúng tên cột trong DB
                         \Filament\Infolists\Components\TextEntry::make('account.status')
-                            ->label('Account Status Tracking')
+                            ->label(__('system.labels.account_status_tracking'))
                             ->html() // Bắt buộc phải có để Filament render thẻ <span> và <div>
                             ->placeholder('No status history found.')
                             ->formatStateUsing(function ($state, $record) {
@@ -381,13 +387,15 @@ trait HasTrackerSchema
                                     };
 
                                     $label = match ($status) {
-                                        'used' => 'In Use',
-                                        'limited' => 'PayPal Limited',
-                                        'linked' => 'Linked PayPal',
-                                        'unlinked' => 'Unlinked PayPal',
-                                        'not_linked' => 'Not Linked to PayPal',
-                                        'no_paypal_needed' => 'No PayPal Required',
-                                        default => ucfirst(str_replace('_', ' ', (string) $status)),
+                                        'active' => __('system.status.active'),
+                                        'used' => __('system.status.used'),
+                                        'no_paypal_needed' => __('system.status.no_paypal_required'),
+                                        'not_linked' => __('system.status.not_linked_paypal'),
+                                        'unlinked' => __('system.status.unlinked_paypal'),
+                                        'linked' => __('system.status.linked_paypal'),
+                                        'limited' => __('system.status.paypal_limited'),
+                                        'banned' => __('system.status.banned'),
+                                        default => __('system.status.' . $status)
                                     };
 
                                     $isLast = $index === count($statusHistory) - 1;
@@ -406,18 +414,18 @@ trait HasTrackerSchema
                     ])->columns(2),
 
                 // PHẦN 2: PLATFORM & SOURCE INFORMATION
-                \Filament\Infolists\Components\Section::make('Order Details & Rebate')
+                \Filament\Infolists\Components\Section::make(__('system.rebate_tracker.order_detail'))
                     ->schema([
                         \Filament\Infolists\Components\TextEntry::make('transaction_date')
-                            ->label('Transaction Date')
+                            ->label(__('system.labels.transaction_date'))
                             ->dateTime('d/m/Y')
                             ->placeholder('N/A'),
                         \Filament\Infolists\Components\TextEntry::make('payout_date')
-                            ->label('Payout Date')
+                            ->label(__('system.labels.payout_date'))
                             ->dateTime('d/m/Y')
                             ->placeholder('N/A'),
                         \Filament\Infolists\Components\TextEntry::make('status')
-                            ->label('Status')
+                            ->label(__('system.labels.status'))
                             ->placeholder('N/A')
                             ->badge()
                             ->icon(fn(string $state): string => match ($state) {
@@ -429,11 +437,11 @@ trait HasTrackerSchema
                                 default => 'heroicon-m-question-mark-circle',
                             })
                             ->formatStateUsing(fn(string $state): string => match ($state) {
-                                'clicked' => 'Clicked',
-                                'pending' => 'Pending',
-                                'confirmed' => 'Confirmed',
-                                'missing' => 'Missing',
-                                'ineligible' => 'Ineligible',
+                                'clicked' => __('system.status.clicked'),
+                                'pending' => __('system.status.pending'),
+                                'confirmed' => __('system.status.confirmed'),
+                                'missing' => __('system.status.missing'),
+                                'ineligible' => __('system.status.ineligible'),
                                 default => ucfirst($state), // Các nhãn khác chỉ viết hoa chữ cái đầu
                             })
                             ->color(fn(string $state): string => match ($state) {
@@ -445,38 +453,38 @@ trait HasTrackerSchema
                                 default => 'gray',
                             }),
                         \Filament\Infolists\Components\TextEntry::make('store_name')
-                            ->label('Store name')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.store_name'))
+                            ->placeholder(__('system.n/a')),
 
                         \Filament\Infolists\Components\TextEntry::make('order_id')
-                            ->label('Order ID')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.order_id'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('order_value')
-                            ->label('Order ($)')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.order_value'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('cashback_percent')
-                            ->label('Cashback Percent (%)')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.cashback_percent'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('rebate_amount')
-                            ->label('Cashback ($)')
+                            ->label(__('system.labels.rebate_amount'))
                             ->money('USD')
                             ->weight(FontWeight::Bold)
                             ->color('success'),
                     ])->columns(3),
 
                 // PHẦN 3: Logistics & Note
-                \Filament\Infolists\Components\Section::make('Logistics & Note')
+                \Filament\Infolists\Components\Section::make(__('system.labels.note'))
                     ->schema([
                         \Filament\Infolists\Components\TextEntry::make('device')
-                            ->label('Device')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.device'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('state')
-                            ->label('State')
-                            ->placeholder('N/A')
+                            ->label(__('system.labels.state_us'))
+                            ->placeholder(__('system.n/a'))
                             ->formatStateUsing(fn($state) => $state ? "{$state} - " . (self::$usStates[$state] ?? '') : 'N/A'),
                         \Filament\Infolists\Components\TextEntry::make('note')
-                            ->label('Note')
-                            ->placeholder('N/A')
+                            ->label(__('system.labels.note'))
+                            ->placeholder(__('system.n/a'))
                             ->columnSpanFull()
                             ->html() // Cho phép tự định nghĩa HTML để ép khoảng cách
                             ->formatStateUsing(fn($state) => $state ? '
@@ -487,7 +495,7 @@ trait HasTrackerSchema
                                     padding: 0;
                                 ">' . e(trim($state)) . '</pre>' : 'N/A'),
                         \Filament\Infolists\Components\TextEntry::make('detail_transaction')
-                            ->label('Detail Transaction')
+                            ->label(__('system.labels.transaction_details'))
                             ->columnSpanFull()
                             ->html() // Cho phép tự định nghĩa HTML để ép khoảng cách
                             ->formatStateUsing(fn($state) => $state ? '
@@ -513,7 +521,7 @@ trait HasTrackerSchema
             ->defaultGroup('account_id')
             ->groups([
                 Group::make('account_id')
-                    ->label('Account')
+                    ->label(__('system.labels.account_email'))
                     ->collapsible()
                     ->getTitleFromRecordUsing(function ($record) {
                         // Hàng Header bây giờ CHỈ HIỆN EMAIL
@@ -523,7 +531,7 @@ trait HasTrackerSchema
             ->columns([
                 // PLATFORM => ALL REBATE TRACKER/ HIDE: SUB-TRACKER
                 Tables\Columns\TextColumn::make('account.platform')
-                    ->label('Platform')
+                    ->label(__('system.labels.platform'))
                     ->alignment(Alignment::Center)
                     ->extraHeaderAttributes(['style' => 'width: 90px; min-width: 90px'])
                     ->extraAttributes(['style' => 'width: 90px; min-width: 90px'])
@@ -535,7 +543,7 @@ trait HasTrackerSchema
 
                 // 1. STORE (Đẩy lùi vào để phân cấp)
                 Tables\Columns\TextColumn::make('store_name')
-                    ->label('Store')
+                    ->label(__('system.labels.store_name'))
                     ->weight('medium')
                     ->icon('heroicon-m-shopping-bag')
                     ->iconColor('gray')
@@ -547,20 +555,20 @@ trait HasTrackerSchema
 
                 // 2. ORDER VALUE
                 Tables\Columns\TextColumn::make('order_value')
-                    ->label('Order ($)')
+                    ->label(__('system.labels.order_value'))
                     ->money('USD')
                     ->alignment(Alignment::Center),
 
                 // 3. CASHBACK PERCENT
                 Tables\Columns\TextColumn::make('cashback_percent')
-                    ->label('Percent (%)')
+                    ->label(__('system.labels.cashback_percent'))
                     ->numeric(2)
                     ->suffix('%')
                     ->alignment(Alignment::Center),
 
                 // 4. CASHBACK ($) - ĐÂY LÀ CHÌA KHÓA
                 Tables\Columns\TextColumn::make('rebate_amount')
-                    ->label('Cashback ($)')
+                    ->label(__('system.labels.rebate_amount'))
                     ->money('USD')
                     ->color('success')
                     ->weight('bold')
@@ -576,7 +584,7 @@ trait HasTrackerSchema
 
                 // 5. STATUS
                 Tables\Columns\TextColumn::make('status')
-                    ->label('Status')
+                    ->label(__('system.labels.status'))
                     ->alignment(Alignment::Center)
                     ->badge()
                     // 1. Giữ nguyên Icon trạng thái ở phía trước (trái)
@@ -591,7 +599,7 @@ trait HasTrackerSchema
                     // 2. Dùng formatStateUsing để "vẽ" thêm icon bút chì vào phía sau (phải)
                     ->formatStateUsing(fn(string $state) => new \Illuminate\Support\HtmlString('
                         <div class="flex items-center gap-1.5 justify-center">
-                            <span>' . ucfirst($state) . '</span>
+                            <span>' . __('system.status.' . $state) . '</span>
                                 ' . \Illuminate\Support\Facades\Blade::render('<x-heroicon-m-pencil-square class="w-4 h-4 text-gray-400" />') . '
                          </div>
                     '))
@@ -604,14 +612,20 @@ trait HasTrackerSchema
                     })
                     ->action(
                         Tables\Actions\Action::make('quick_set_status')
+                            ->label(__('system.labels.quick_set_status'))
+                            ->modalHeading(__('system.labels.quick_set_status'))
+                            ->modalSubmitActionLabel(__('system.actions.get_account')) // Dùng 'Nhận tài khoản' cho Gửi nếu thích, hoặc tạo key mới 'submit'.
+                            ->modalSubmitActionLabel('Gửi')
+                            ->modalCancelActionLabel('Hủy bỏ')
                             ->form([
                                 Forms\Components\Select::make('status')
+                                    ->label(__('system.labels.status'))
                                     ->options([
-                                        'clicked' => 'Clicked',
-                                        'pending' => 'Pending',
-                                        'confirmed' => 'Confirmed',
-                                        'missing' => 'Missing',
-                                        'ineligible' => 'Ineligible',
+                                        'clicked' => __('system.status.clicked'),
+                                        'pending' => __('system.status.pending'),
+                                        'confirmed' => __('system.status.confirmed'),
+                                        'missing' => __('system.status.missing'),
+                                        'ineligible' => __('system.status.ineligible'),
                                     ])
                                     ->default(fn($record) => $record->status)
                                     ->required(),
@@ -621,23 +635,24 @@ trait HasTrackerSchema
                                 $record->update($data);
 
                                 // 2. Gọi Cỗ máy để đẩy lên Google Sheet
-                                static::syncSingleRecordToSheet($record);
+                                static::syncTrackerWithService($record);
 
                                 \Filament\Notifications\Notification::make()
-                                    ->title('Status has been updated and synchronized with Google Sheets!')
+                                    ->title(__('system.notifications.status_updated_sync'))
                                     ->success()
                                     ->send();
                             })
+
                     ),
 
                 // 6. TIMELINE
                 Tables\Columns\TextColumn::make('transaction_date')
-                    ->label('Transaction Date')
-                    ->placeholder('N/A')
+                    ->label(__('system.labels.transaction_date'))
+                    ->placeholder(__('system.n/a'))
                     ->date('d/m/Y')
                     ->alignment(Alignment::Center),
                 Tables\Columns\TextColumn::make('payout_date')
-                    ->label('Payout Date')
+                    ->label(__('system.labels.payout_date'))
                     ->alignment(Alignment::Center)
                     // 1. Dùng state() để ép giá trị null thành chuỗi 'N/A' TRƯỚC khi render
                     ->state(fn($record) => $record->payout_date ? $record->payout_date : 'N/A')
@@ -656,21 +671,26 @@ trait HasTrackerSchema
                     // 4. Action bấm vào để sửa
                     ->action(
                         Tables\Actions\Action::make('quick_set_date')
+                            ->label(__('system.labels.quick_set_date'))
+                            ->modalHeading(__('system.labels.quick_set_date'))
+                            ->modalSubmitActionLabel('Gửi')
+                            ->modalCancelActionLabel('Hủy bỏ')
                             ->form([
                                 Forms\Components\DatePicker::make('payout_date')
-                                    ->label('Select Payout Date')
+                                    ->label(__('system.labels.select_payout_date'))
                                     ->default(fn($record) => $record->payout_date ?? now())
                                     ->required(),
                             ])
                             ->action(function ($record, array $data) {
                                 $record->update($data);
-                                static::syncSingleRecordToSheet($record);
+                                static::syncTrackerWithService($record);
 
                                 \Filament\Notifications\Notification::make()
-                                    ->title('Payout Date has been updated and synchronized with Google Sheets!')
+                                    ->title(__('system.notifications.date_updated_sync'))
                                     ->success()
                                     ->send();
                             })
+
                     ),
             ])
             ->striped()
@@ -679,7 +699,7 @@ trait HasTrackerSchema
             ->filters([
                 // Lọc theo Tài khoản (Email)
                 Tables\Filters\SelectFilter::make('account_id')
-                    ->label('Account Email')
+                    ->label(__('system.labels.account_email'))
                     ->options(function () {
                         // B1: Lấy danh sách các account_id ĐÃ ĐƯỢC LÀM trong bảng RebateTracker
                         $activeAccountIds = \App\Models\RebateTracker::whereNotNull('account_id')
@@ -696,11 +716,11 @@ trait HasTrackerSchema
                     })
                     ->searchable()
                     ->preload()
-                    ->columnSpan(1),
+                    ->columnSpan(fn() => auth()->user()?->role === 'operator' ? 2 : 1),
 
                 // Bộ lọc Platform (Quan trọng để Sub-menu chạy)
                 Tables\Filters\SelectFilter::make('platform')
-                    ->label('Platform')
+                    ->label(__('system.labels.platform'))
                     ->options(function () {
                         // Tương tự, chỉ lấy những Platform của các Account đã có đơn
                         $activeAccountIds = \App\Models\RebateTracker::whereNotNull('account_id')
@@ -733,7 +753,7 @@ trait HasTrackerSchema
 
                 // Bộ lọc Trạng thái (CHỈ HIỆN TRẠNG THÁI ĐÃ CÓ TRONG DỮ LIỆU THỰC TẾ)
                 Tables\Filters\SelectFilter::make('status')
-                    ->label('Status')
+                    ->label(__('system.labels.status'))
                     ->options(function () {
                         // 1. Quét tìm các status đang thực sự tồn tại trong DB
                         $activeStatuses = \App\Models\RebateTracker::whereNotNull('status')
@@ -742,11 +762,11 @@ trait HasTrackerSchema
 
                         // 2. Bộ từ điển dịch tên Status cho đẹp
                         $labels = [
-                            'pending' => 'Pending',
-                            'confirmed' => 'Confirmed',
-                            'ineligible' => 'Ineligible',
-                            'missing' => 'Missing',
-                            'clicked' => 'Clicked / Ordered',
+                            'pending' => __('system.status.pending'),
+                            'confirmed' => __('system.status.confirmed'),
+                            'ineligible' => __('system.status.ineligible'),
+                            'missing' => __('system.status.missing'),
+                            'clicked' => __('system.status.clicked'),
                         ];
 
                         // 3. Ráp dữ liệu: Chỉ tạo Option cho những Status quét được ở Bước 1
@@ -763,7 +783,7 @@ trait HasTrackerSchema
 
                 // Bộ lọc theo User (CHỈ HIỆN USER ĐÃ CÓ ĐƠN)
                 Tables\Filters\SelectFilter::make('user_id')
-                    ->label('User')
+                    ->label(__('system.labels.user'))
                     ->visible(fn() => auth()->user()?->isAdmin()) // 🟢 ẨN KHỎI NHÂN VIÊN
                     ->options(function () {
                         // 1. Quét lấy danh sách user_id đang thực sự có đơn
@@ -782,7 +802,7 @@ trait HasTrackerSchema
 
                 // Lọc theo Tên cửa hàng (Store Name)
                 Tables\Filters\SelectFilter::make('store_name')
-                    ->label('Store Name')
+                    ->label(__('system.labels.store_name'))
                     ->options(
                         fn() => \App\Models\RebateTracker::select('store_name')
                             ->whereNotNull('store_name')
@@ -796,8 +816,8 @@ trait HasTrackerSchema
                 // Lọc theo Ngày Giao dịch (Từ ngày - Đến ngày)
                 Tables\Filters\Filter::make('transaction_date')
                     ->form([
-                        \Filament\Forms\Components\DatePicker::make('transaction_from')->label('Transaction From'),
-                        \Filament\Forms\Components\DatePicker::make('transaction_to')->label('Transaction To'),
+                        \Filament\Forms\Components\DatePicker::make('transaction_from')->label(__('system.trackers.filters.transaction_from')),
+                        \Filament\Forms\Components\DatePicker::make('transaction_to')->label(__('system.trackers.filters.transaction_to')),
                     ])
                     ->columns(2)     // 👈 Ép 2 ô Date nằm ngang nhau
                     ->columnSpan(2)  // 👈 Chiếm 2 phần lưới
@@ -810,8 +830,8 @@ trait HasTrackerSchema
                 // Lọc theo Ngày Payout (Từ ngày - Đến ngày)
                 Tables\Filters\Filter::make('payout_date')
                     ->form([
-                        \Filament\Forms\Components\DatePicker::make('payout_from')->label('Payout From'),
-                        \Filament\Forms\Components\DatePicker::make('payout_to')->label('Payout To'),
+                        \Filament\Forms\Components\DatePicker::make('payout_from')->label(__('system.trackers.filters.payout_from')),
+                        \Filament\Forms\Components\DatePicker::make('payout_to')->label(__('system.trackers.filters.payout_to')),
                     ])
                     ->columns(2)     // 👈 Ép 2 ô Date nằm ngang nhau
                     ->columnSpan(2)  // 👈 Chiếm 2 phần lưới
@@ -832,15 +852,15 @@ trait HasTrackerSchema
                 // Nút Xem chi tiết (Hình con mắt) hiện ra bên ngoài
                 Tables\Actions\ViewAction::make()
                     ->label('') // Để trống nhãn để chỉ hiện icon cho gọn
-                    ->modalHeading('Account Details') // TIÊU ĐỀ CỦA MODAL
-                    ->tooltip('Details') // Hiện ghi chú khi di chuột vào
+                    ->modalHeading(__('system.labels.asset_info')) // TIÊU ĐỀ CỦA MODAL
+                    ->tooltip(__('system.labels.detail')) // Hiện ghi chú khi di chuột vào
                     ->icon('heroicon-o-eye')
                     ->color('gray'), // Màu xám nhẹ nhàng, không lấn át nút cam
 
                 Tables\Actions\ActionGroup::make([
                     // Thêm nút nhân bản
                     Tables\Actions\ReplicateAction::make()
-                        ->label('Replicate')
+                        ->label(__('system.actions.replicate') ?: 'Replicate')
                         ->icon('heroicon-m-plus-circle')
                         ->color('success')
                         // Có thể yêu cầu điền thông tin mới trước khi tạo
@@ -864,50 +884,36 @@ trait HasTrackerSchema
                 Tables\Actions\BulkActionGroup::make([
                     // NÚT XUẤT GOOGLE SHEET (18 CỘT)
                     Tables\Actions\BulkAction::make('export_to_google_sheet')
-                        ->label('Export to Google Sheet')
+                        ->label(__('system.actions.export_to_sheet'))
                         ->icon('heroicon-o-table-cells')
                         ->color('success')
-                        // 🔒 KHÓA: Chỉ Admin mới thấy
                         ->visible(fn() => auth()->user()?->isAdmin())
                         ->requiresConfirmation()
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
-                            $sheetService = app(\App\Services\GoogleSheetService::class);
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records, \App\Services\GoogleSyncService $syncService) {
+                            try {
+                                $syncService->syncTrackers($records);
 
-                            // Nhóm các bản ghi theo Platform để gửi API theo từng đợt (Batch)
-                            $groupedRecords = $records->groupBy(fn($record) => $record->account?->platform ?: 'General');
-
-                            foreach ($groupedRecords as $platform => $group) {
-                                $rows = $group->map(fn($record) => static::formatRecordForSheet($record))->values()->toArray();
-                                // FIX #2: ucfirst để đúng tên tab (Rakuten_Tracker, không phải rakuten_Tracker)
-                                $targetTab = ucfirst($platform) . '_Tracker';
-
-                                // FIX #3: truyền $headers để tab mới có hàng tiêu đề
-                                $sheetService->createSheetIfNotExist($targetTab);
-                                $sheetService->upsertRows($rows, $targetTab, static::$trackerHeaders);
-                                $sheetService->formatColumnsAsClip($targetTab, 5, 6);
-                                $sheetService->formatColumnsAsClip($targetTab, 15, 16);
-                                $sheetService->formatColumnsAsClip($targetTab, 18, 19);
-
-                                // Sync vào Tab tổng
-                                $sheetService->upsertRows($rows, 'All_Rebate_Tracker', static::$trackerHeaders);
-                                $sheetService->formatColumnsAsClip('All_Rebate_Tracker', 5, 6);
-                                $sheetService->formatColumnsAsClip('All_Rebate_Tracker', 15, 16);
-                                $sheetService->formatColumnsAsClip('All_Rebate_Tracker', 18, 19);
+                                \Filament\Notifications\Notification::make()
+                                    ->title(__('system.notifications.sync_success'))
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title(__('system.notifications.sync_error'))
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
                             }
-
-                            \Filament\Notifications\Notification::make()
-                                ->title('Bulk Sync Complete!')
-                                ->success()
-                                ->send();
                         })
-                        ->deselectRecordsAfterCompletion(), // Tự động bỏ tick sau khi xuất xong
+                        ->deselectRecordsAfterCompletion(),
+                    // Tự động bỏ tick sau khi xuất xong
 
 
 
                     // Nút đổi nhanh sang Pending
-                    static::makeBulkStatusAction('pending', 'Mark as Pending', 'heroicon-o-clock', 'info'),
+                    static::makeBulkStatusAction('pending', __('system.actions.mark_as_pending') ?: 'Mark as Pending', 'heroicon-o-clock', 'info'),
                     // Nút đổi nhanh sang Confirme
-                    static::makeBulkStatusAction('confirmed', 'Mark as Confirmed', 'heroicon-o-check-badge', 'success'),
+                    static::makeBulkStatusAction('confirmed', __('system.actions.mark_as_confirmed') ?: 'Mark as Confirmed', 'heroicon-o-check-badge', 'success'),
 
                     Tables\Actions\RestoreBulkAction::make(),     // 🟢 Khôi phục nhiều dòng
                     Tables\Actions\DeleteBulkAction::make(),
@@ -956,100 +962,11 @@ trait HasTrackerSchema
     // =========================================================
     // DÁN ĐOẠN NÀY VÀO ĐÂY (NẰM NGOÀI HÀM TABLE)
     // =========================================================
-    public static array $trackerHeaders = [
-        'ID',
-        'Email Address',
-        'Password',
-        'Platform',
-        'User',
-        'Account Status Tracking',
-        'Transaction Date',
-        'Store Name',
-        'Order ID',
-        'Order Value ($)',
-        'Cashback Percent (%)',
-        'Rebate Amount ($)',
-        'Status',
-        'Payout Date',
-        'Device',
-        'State',
-        'Note',
-        'Detail Transaction'
-    ];
-
-    public static function formatRecordForSheet($record): array
+    public static function syncTrackerWithService($record): void
     {
-        $rawStatuses = $record->account?->status;
-        $statusArray = is_array($rawStatuses) ? $rawStatuses : (json_decode($rawStatuses, true) ?? [$rawStatuses]);
-        $filteredStatuses = array_filter($statusArray);
-        $mappedStatuses = array_map(function ($status) {
-            return match ($status) {
-                'used' => 'In Use',
-                'limited' => 'PayPal Limited',
-                'linked' => 'Linked PayPal',
-                'unlinked' => 'Unlinked PayPal',
-                'not_linked' => 'Not Linked to PayPal',
-                'no_paypal_needed' => 'No PayPal Required',
-                default => ucfirst(str_replace('_', ' ', (string) $status)),
-            };
-        }, $filteredStatuses);
-        $statusString = implode(' → ', $mappedStatuses);
-
-        $stateCode = $record->state;
-        $stateName = $stateCode ? "{$stateCode} - " . (self::$usStates[$stateCode] ?? '') : 'N/A';
-
-        $transDate = $record->transaction_date ? \Carbon\Carbon::parse($record->transaction_date)->format('Y-m-d') : 'N/A';
-        $payoutDate = $record->payout_date ? \Carbon\Carbon::parse($record->payout_date)->format('Y-m-d') : 'N/A';
-
-        $txStatus = match ($record->status) {
-            'pending' => 'Pending',
-            'confirmed' => 'Confirmed',
-            'ineligible' => 'Ineligible',
-            'missing' => 'Missing',
-            'clicked' => 'Clicked / Ordered',
-            default => ucfirst(trim((string) $record->status ?: 'N/A')),
-        };
-
-        return [
-            $record->id,                                        // 1. ID
-            $record->account?->email?->email ?? 'N/A',          // 2. Email Address
-            $record->account?->password ?? 'N/A',               // 3. Password
-            $record->account?->platform ?? 'N/A',               // 4. Platform
-            $record->user?->name ?? 'N/A',                      // 5. User
-            $statusString ?: 'N/A',                             // 6. Account Status Tracking
-            $transDate,                                         // 7. Transaction Date
-            $record->store_name ?? 'N/A',                       // 8. Store name
-            $record->order_id ?? 'N/A',                         // 9. Order ID
-            $record->order_value ?? 0,                          // 10. Order value ($)
-            $record->cashback_percent ?? 0,                     // 11. Cashback Percent (%)
-            $record->rebate_amount ?? 0,                        // 12. Cashback ($)
-            $txStatus ?: 'N/A',                                 // 13. Status
-            $payoutDate,                                        // 14. Payout Date
-            $record->device ?? 'N/A',                           // 15. Device
-            $stateName,                                         // 16. State
-            $record->note ?? 'N/A',                             // 17. Note
-            $record->detail_transaction ?? 'N/A',               // 18. Detail Transaction
-        ];
+        app(\App\Services\GoogleSyncService::class)->syncTrackers(collect([$record]));
     }
 
-    // =========================================================
-    // bootHasTrackerSchema ĐÃ XÓA (FIX #7):
-    // RebateTrackerObserver (đăng ký trong AppServiceProvider) đã xử lý
-    // created/updated/deleted → không cần boot thêm tránh double-dispatch.
-    // =========================================================
-
-    public static function syncSingleRecordToSheet($record): void
-    {
-        $row = static::formatRecordForSheet($record);
-        $sheetService = app(\App\Services\GoogleSheetService::class);
-
-        // 🟢 PHÒNG THỦ: Nếu platform rỗng, dùng 'General' để tránh lỗi Tab "_Tracker"
-        $platform = $record->account?->platform ?: 'General';
-        // Tên Tab dựa trên Platform + Tracker (Ví dụ: Rakuten_Tracker)
-
-        $sheetService->upsertRows([$row], 'All_Rebate_Tracker', static::$trackerHeaders);
-        $sheetService->upsertRows([$row], ucfirst($platform) . '_Tracker', static::$trackerHeaders); // FIX #2: ucfirst
-    }
 
 
     // =========================================================

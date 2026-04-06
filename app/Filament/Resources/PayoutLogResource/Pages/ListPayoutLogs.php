@@ -11,31 +11,15 @@ use Filament\Resources\Pages\ListRecords;
 
 class ListPayoutLogs extends ListRecords
 {
+    use \App\Filament\Traits\HasSyncToSheetAction;
+
     protected static string $resource = PayoutLogResource::class;
 
-    // 1. Thêm nút bấm vào giao diện
     protected function getHeaderActions(): array
     {
         return [
+            $this->getSyncToSheetAction('syncPayoutLogs', 'Payout Logs'),
             Actions\CreateAction::make(),
-
-            Actions\Action::make('sync_to_sheet')
-                ->label('Sync to Google Sheet')
-                ->icon('heroicon-o-arrow-path')
-                ->color('success')
-                ->requiresConfirmation()
-                // 🟢 CHỈ HIỆN CHO ADMIN
-                ->visible(fn() => auth()->user()?->isAdmin())
-                ->action(fn() => PayoutLogResource::syncToGoogleSheet()),
-
-            // Nút Sync ngược từ Sheet về
-            Actions\Action::make('sync_from_sheet')
-                ->label('Sync From Google Sheet')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('warning')
-                // 🟢 CHỈ HIỆN CHO ADMIN
-                ->visible(fn() => auth()->user()?->isAdmin())
-                ->action(fn() => PayoutLogResource::syncFromGoogleSheet()),
         ];
     }
 }

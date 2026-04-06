@@ -21,6 +21,7 @@ RebateOps is a professional, high-performance internal tool built with **Laravel
 - **Pessimistic Locking**: Prevents race conditions on wallet balances using `lockForUpdate()`.
 - **Atomic Transactions**: All balance changes follow the **Red-Green-Refactor** safety pattern within DB transactions.
 - **Advanced Data Recovery**: **SoftDeletes** implemented across all core models (Accounts, Tracker, Payouts, Brands, Methods).
+- **Advanced RBAC**: Granular permission system with "Read-Only Auditor" parity for specialized financial roles.
 - **At-Rest Encryption**: Sensitive data like Gift Card codes, PINs, and account passwords are encrypted using Laravel's native encryption.
 - **Precise Calculation**: High-precision `decimal` casting for all USD/VND financial columns.
 
@@ -41,6 +42,11 @@ RebateOps is designed for team collaboration with strictly scoped access.
 - **Settlement Module**: Finalize payments to staff members, upload transfer proofs, and track profit margins.
 - **System Integrity**: Access to Activity Logs, User Management, and global configuration.
 
+### 💹 Finance (The Auditor)
+- **Financial Oversight**: Specialized Dashboard showing only the system profit and payroll analysis (`AdminUserEarningsTable`).
+- **Read-Only Auditor Model**: Access to all accounts, emails, and payout logs (Admin-parity visibility) but explicitly barred from editing, deleting, or exporting data.
+- **Zero Friction**: Navigation is streamlined to hide operational trackers, keeping focus on financial reconciliation.
+
 ### 👤 Staff (The Operator)
 - **Account Management**: Claim and manage their assigned accounts and linked emails.
 - **Operations**:
@@ -54,16 +60,21 @@ RebateOps is designed for team collaboration with strictly scoped access.
 
 ```
 REBATEOPS
-├── RESOURCE HUB          # Raw Assets
-│   ├── All Platforms     # Account management
-│   └── Emails            # Central email hub (linked objects)
-├── WORKING SPACE         # Daily Operations
-│   ├── Rebate Trackers   # Order tracking (Clicked → Confirmed)
-│   └── Price Tracker     # Market rates & brand boosts
-└── WALLET & PAYOUTS      # Financial Layer
-    ├── Payout Logs       # Withdrawals & Liquidations
-    ├── Payout Methods    # Virtual Wallets (PayPal/Bank)
-    └── Settlements       # Staff Payroll & Proofs
+├── RESOURCE HUB          # Central Assets (Admin & Finance Parity)
+│   ├── Emails            # Linked email directory
+│   └── Accounts          # Account management
+├── WORKING SPACE         # Operations (Hidden from Finance)
+│   ├── Rebate Trackers   # Order tracking
+├── WALLET & PAYOUTS      # Financial Layer
+│   ├── Payout Logs       # Withdrawals & Liquidations
+│   ├── Payout Methods    # Virtual Wallets
+│   └── Disbursement      # Payroll
+├── LOGS                  # Audit Trail (Admin only)
+│   └── Activity Logs     # System audit
+└── SETTINGS              # System Core (Admin only)
+    ├── Users             # User Management
+    ├── Platforms         # Platform Configuration
+    └── Brands            # Brand Management
 ```
 
 ---
@@ -100,9 +111,10 @@ REBATEOPS
 ## 👨‍💻 Roadmap
 - [x] v5.0: Advanced Financial Locking & SoftDeletes
 - [x] v5.0: Premium Mixed Mode UI Overhaul
-- [ ] v5.1: Automated Profit/Loss Analytics
-- [ ] v5.2: REST API for External Automation
-- [ ] v5.3: Bulk Image Processing for Payment Proofs
+- [x] v5.1: Finance Role & Advanced RBAC Overhaul
+- [ ] v5.2: Automated Profit/Loss Analytics
+- [ ] v5.3: REST API for External Automation
+- [ ] v5.4: Bulk Image Processing for Payment Proofs
 
 ---
 <p align="center">Built for Excellence. Optimized for Profit.</p>

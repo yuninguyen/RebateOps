@@ -55,7 +55,7 @@ return [
 
         'subheadings' => [
             'all' => 'All :label',
-            'group' => 'Total',
+            'group' => 'Total: :group',
             'page' => 'This page',
         ],
 

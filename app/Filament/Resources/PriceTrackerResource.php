@@ -23,10 +23,37 @@ class PriceTrackerResource extends Resource
     protected static ?string $model = RebateTracker::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static ?string $navigationGroup = 'WORKING SPACE';
-    protected static ?string $navigationLabel = 'Price Tracker';
-    protected static ?string $navigationParentItem = 'All Rebate Tracker';
     protected static ?int $navigationSort = 6;
+
+    public static function getNavigationLabel(): string
+    {
+        return __('system.trackers.price');
+    }
+
+    public static function getPluralLabel(): string
+    {
+        return __('system.trackers.price');
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'working_space';
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return !auth()->user()?->isFinance();
+    }
+
+    public static function canAccess(): bool
+    {
+        return !auth()->user()?->isFinance();
+    }
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return __('system.trackers.all_rebate');
+    }
 
     // Thêm dòng này để thu gọn menu bên trái, nhường chỗ cho bảng
     protected static bool $isScopedToTenant = false;

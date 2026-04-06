@@ -24,11 +24,15 @@ class PayoutLogObserver implements ShouldHandleEventsAfterCommit
                         'exchange_rate' => $payoutLog->exchange_rate,
                         'total_vnd' => $payoutLog->total_vnd,
                     ]);
+
+                    // ✅ ĐỒNG BỘ PARENT LÊN GOOGLE SHEETS
+                    // Vì dùng updateQuietly nên Observer của Parent không tự chạy, ta phải gọi thủ công
+                    \App\Jobs\SyncGoogleSheetJob::dispatch($parent->id, get_class($parent));
                 }
             }
         }
 
-        if (isset($payoutLog->is_syncing_from_sheet) && $payoutLog->is_syncing_from_sheet) {
+        if ($payoutLog->is_syncing_from_sheet) {
             return;
         }
 
@@ -36,53 +40,105 @@ class PayoutLogObserver implements ShouldHandleEventsAfterCommit
     }
 
     /**
+     * Sự kiện CREATED: Xử lý nếu đơn vừa tạo đã ở trạng thái Completed
+     */
+    public function created(PayoutLog $payoutLog): void
+    {
+        if ($payoutLog->status === 'completed') {
+            $this->syncMethodBalance($payoutLog->payoutMethod);
+            
+            if ($payoutLog->transaction_type === 'liquidation') {
+                $this->updateMethodExchangeRate($payoutLog->payoutMethod);
+            }
+        }
+    }
+
+    /**
      * Sự kiện UPDATED: Xử lý thay đổi Status để cộng/trừ tiền ví
-     * FIX #1: Hỗ trợ rollback khi chuyển ngược status (completed → pending)
-     * FIX #2: Dùng DB::transaction + lockForUpdate để tránh race condition
      */
     public function updated(PayoutLog $payoutLog): void
     {
-        if (!$payoutLog->wasChanged('status')) {
-            return;
+        // 1. Kiểm tra nếu có sự thay đổi trạng thái (vào hoặc ra khỏi Completed)
+        $wasCompleted = $payoutLog->getOriginal('status') === 'completed';
+        $isCompleted = $payoutLog->status === 'completed';
+
+        if ($wasCompleted || $isCompleted) {
+            $this->syncMethodBalance($payoutLog->payoutMethod);
+
+            // 2. Nếu là Liquidation và thay đổi dữ liệu liên quan đến tỷ giá
+            if ($payoutLog->transaction_type === 'liquidation') {
+                $this->updateMethodExchangeRate($payoutLog->payoutMethod);
+            }
+        }
+    }
+
+    /**
+     * Sự kiện DELETED: Hoàn lại tiền nếu đơn bị xóa là đơn đã hoàn thành
+     */
+    public function deleted(PayoutLog $payoutLog): void
+    {
+        if ($payoutLog->status === 'completed') {
+            $this->syncMethodBalance($payoutLog->payoutMethod);
+            
+            if ($payoutLog->transaction_type === 'liquidation') {
+                $this->updateMethodExchangeRate($payoutLog->payoutMethod);
+            }
         }
 
-        $oldStatus = $payoutLog->getOriginal('status');
-        $newStatus = $payoutLog->status;
-        $method = $payoutLog->payoutMethod;
+        // Luôn đồng bộ lệnh xóa lên Google Sheet
+        \App\Jobs\SyncGoogleSheetJob::dispatch($payoutLog->id, get_class($payoutLog), 'delete');
+    }
 
-        if (!$method) {
-            return;
-        }
+    /**
+     * Đồng bộ số dư ví bằng cách tính lại tổng các giao dịch (Chống nhân đôi lỗi)
+     */
+    private function syncMethodBalance(?\App\Models\PayoutMethod $method): void
+    {
+        if (!$method) return;
 
-        DB::transaction(function () use ($payoutLog, $oldStatus, $newStatus, $method) {
-            // Lock ví để tránh race condition khi nhiều giao dịch cùng lúc
+        DB::transaction(function () use ($method) {
+            // Lock ví để tránh race condition
             $method = $method->lockForUpdate()->find($method->id);
 
-            // Rollback: completed → khác (hoàn lại balance)
-            if ($oldStatus === 'completed' && $newStatus !== 'completed') {
-                if ($payoutLog->transaction_type === 'withdrawal') {
-                    $method->decrement('current_balance', $payoutLog->net_amount_usd);
-                } elseif (in_array($payoutLog->transaction_type, ['hold', 'liquidation'])) {
-                    $method->increment('current_balance', $payoutLog->amount_usd);
-                }
-            }
+            // TỔNG RÚT (WITHDRAWAL) - Dùng net_amount_usd (tiền thực nhận)
+            $totalWithdraw = PayoutLog::where('payout_method_id', $method->id)
+                ->where('transaction_type', 'withdrawal')
+                ->where('status', 'completed')
+                ->sum('net_amount_usd') ?? 0;
 
-            // Forward: khác → completed (áp dụng balance)
-            if ($newStatus === 'completed' && $oldStatus !== 'completed') {
-                if ($payoutLog->transaction_type === 'withdrawal') {
-                    $method->increment('current_balance', $payoutLog->net_amount_usd);
-                } elseif (in_array($payoutLog->transaction_type, ['hold', 'liquidation'])) {
-                    $method->decrement('current_balance', $payoutLog->amount_usd);
-                }
-            }
+            // TỔNG ĐỔI (LIQUIDATION) - Dùng amount_usd (tiền gốc bán ra)
+            $totalLiquidate = PayoutLog::where('payout_method_id', $method->id)
+                ->where('transaction_type', 'liquidation')
+                ->where('status', 'completed')
+                ->sum('amount_usd') ?? 0;
+
+            // Số dư = Thu - Chi
+            $balance = $totalWithdraw - $totalLiquidate;
+
+            $method->updateQuietly(['current_balance' => round($balance, 2)]);
         });
     }
 
     /**
-     * Sự kiện DELETED: Cập nhật lại Sheet khi xóa dòng
+     * Tự động tính tỷ giá trung bình (VWAP) cho ví dựa trên các đơn Liquidation đã hoàn thành
      */
-    public function deleted(PayoutLog $payoutLog): void
+    private function updateMethodExchangeRate(?\App\Models\PayoutMethod $method): void
     {
-        \App\Jobs\SyncGoogleSheetJob::dispatch($payoutLog->id, get_class($payoutLog), 'delete');
+        if (!$method) return;
+
+        // Công thức: Tỷ giá TB = SUM(amount_usd * exchange_rate) / SUM(amount_usd)
+        $data = PayoutLog::where('payout_method_id', $method->id)
+            ->where('transaction_type', 'liquidation')
+            ->where('status', 'completed')
+            ->selectRaw('SUM(amount_usd * exchange_rate) as total_weighted, SUM(amount_usd) as total_usd')
+            ->first();
+
+        $averageRate = 0;
+        if ($data && $data->total_usd > 0) {
+            $averageRate = $data->total_weighted / $data->total_usd;
+        }
+
+        // Cập nhật vào ví (dùng updateQuietly để tránh lặp)
+        $method->updateQuietly(['exchange_rate' => round($averageRate, 2)]);
     }
 }

@@ -14,6 +14,8 @@ use App\Services\GoogleSheetService;
 
 class ListEmails extends ListRecords
 {
+    use \App\Filament\Traits\HasSyncToSheetAction;
+
     protected static string $resource = EmailResource::class;
 
     public function getMaxContentWidth(): string
@@ -59,66 +61,7 @@ class ListEmails extends ListRecords
                 ->visible(fn() => auth()->user()?->isAdmin()),
 
             //Nút Sync to Google Sheet
-            Actions\Action::make('sync_to_google_sheet')
-                ->label('Sync to Google Sheet')
-                ->icon('heroicon-o-arrow-path')
-                ->color('success')
-                ->requiresConfirmation()
-                // 🟢 CHỈ HIỆN CHO ADMIN
-                ->visible(fn() => auth()->user()?->isAdmin())
-                ->action(function () {
-                    $sheetService = app(GoogleSheetService::class);
-                    $targetTab = 'Emails';
-
-                    try {
-                        // 1. Tự tạo Tab nếu chưa có
-                        $sheetService->createSheetIfNotExist($targetTab);
-
-                        // 2. Lấy dữ liệu (Kèm eager loading để tránh chạy chậm)
-                        $records = EmailResource::getEloquentQuery()
-                            ->withCount('accounts')
-                            ->with('accounts')
-                            ->get();
-
-                        if ($records->isEmpty()) {
-                            Notification::make()->title('No data to sync')->warning()->send();
-                            return;
-                        }
-
-                        // 3. Tạo mảng dữ liệu với Header
-                        $rows = [EmailResource::$emailHeaders];
-                        foreach ($records as $record) {
-                            $rows[] = EmailResource::formatEmailForSheet($record);
-                        }
-
-                        // 4. Đẩy lên Sheet (11 cột từ A đến K)
-                        $sheetService->updateSheet($rows, 'A1:K', $targetTab);
-
-                        // 🟢 5. TỰ ĐỘNG TÔ MÀU (Giúp nhân viên nhìn nhanh trạng thái)
-                        $statusIdx = array_search('Status', EmailResource::$emailHeaders);
-                        $sheetService->applyFormattingWithRules($targetTab, $statusIdx, [
-                            'Live'     => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85], // Xanh lá
-                            'Disabled' => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],  // Đỏ nhạt
-                            'Locked'   => ['red' => 0.9,  'green' => 0.4,  'blue' => 0.4],  // Đỏ đậm
-                        ]);
-
-                        // 🟢 6. THU GỌN CỘT (Giúp bảng tính gọn gàng)
-                        $sheetService->formatColumnsAsClip($targetTab, 2, 3);   // Cột Email & Pass
-                        $sheetService->formatColumnsAsClip($targetTab, 9, 10);  // Cột Platforms & Note
-
-                        Notification::make()
-                            ->title('Success!')
-                            ->body("All Emails has been synced and formatted.")
-                            ->success()
-                            ->send();
-                    } catch (\Exception $e) {
-                        Notification::make()
-                            ->title('Sync Error')
-                            ->body($e->getMessage())
-                            ->danger()
-                            ->send();
-                    }
-                }),
+            $this->getSyncToSheetAction('syncEmails', 'Emails'),
 
             // Nút Create
             \Filament\Actions\CreateAction::make()

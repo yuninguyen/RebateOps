@@ -9,7 +9,7 @@ class UserPaymentPolicy
 {
     public function before(User $user, string $ability): bool|null
     {
-        if ($user->isAdmin()) {
+        if ($user->isAdmin() || $user->isFinance()) {
             return true;
         }
         return null;

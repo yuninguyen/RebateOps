@@ -30,14 +30,10 @@ use App\Filament\Resources\Traits\HasPlatform;
 
 use function Livewire\wrap;
 
-// ... (nhớ import các thư viện TextInput, TextColumn, v.v. giống hệt bên file cũ của bạn)
-
 trait HasAccountSchema
 {
 
-    // Dùng chung $usStates từ HasUsStates thay vì khai báo lại ở đây.
     use HasUsStates;
-    // Dùng chung $platforms từ HasPlatform thay vì khai báo lại ở đây.
     use HasPlatform;
 
 
@@ -45,149 +41,149 @@ trait HasAccountSchema
     {
         return $form
             ->schema([
-                // Gom nhóm các ô nhập liệu vào một Section để giao diện gọn gàng
-                Forms\Components\Section::make('Account Details')
+                Forms\Components\Section::make(__('system.account_claim.section_title'))
                     ->schema([
                         Forms\Components\Select::make('platform')
-                            ->label('Platform')
-                            ->placeholder('Rakuten, RetailMeNot, PayPal...')
+                            ->label(__('system.labels.platform'))
+                            ->placeholder(__('system.placeholders.search_platform'))
                             ->options(self::getPlatforms())
                             ->required()
-                            ->native(false), // Giúp giao diện đồng bộ đẹp hơn
+                            ->disabled(fn() => !auth()->user()?->isAdmin())
+                            ->native(false),
 
                         Forms\Components\Select::make('email_id')
-                            ->label('Email Address')
-                            ->placeholder('Select Email')
-                            ->relationship('email', 'email') // Liên kết với bảng email
+                            ->label(__('system.labels.email_address'))
+                            ->placeholder(__('system.placeholders.select_email'))
+                            ->relationship('email', 'email')
                             ->searchable()
                             ->preload()
                             ->required()
-                            ->createOptionForm([ // Nút (+) tạo nhanh Email mới
+                            ->disabled(fn() => !auth()->user()?->isAdmin())
+                            ->createOptionForm([
                                 Forms\Components\TextInput::make('email')->email()->required(),
-                                Forms\Components\TextInput::make('email_password')->required(),
-                                Forms\Components\TextInput::make('recovery_email')->email(),
+                                Forms\Components\TextInput::make('email_password')
+                                    ->label(__('system.labels.password'))
+                                    ->required(),
+                                Forms\Components\TextInput::make('recovery_email')
+                                    ->label(__('system.labels.recovery_email'))
+                                    ->email(),
                                 Forms\Components\TextInput::make('two_factor_code')
-                                    ->label('2FA Code / Recovery Code')
-                                    ->placeholder('Nhập mã 2FA hoặc mã khôi phục...'),
+                                    ->label(__('system.labels.two_factor_code'))
+                                    ->placeholder(__('system.placeholders.enter_2fa')),
                                 Forms\Components\Select::make('status')
-                                    ->label('Status')
+                                    ->label(__('system.labels.status'))
                                     ->options([
-                                        'active' => 'Live',
-                                        'disabled' => 'Disabled',
-                                        'locked' => 'Locked',
+                                        'active' => __('system.status.live'),
+                                        'disabled' => __('system.status.disabled'),
+                                        'locked' => __('system.status.locked'),
                                     ])
                                     ->default('active')
                                     ->required()
                                     ->native(false),
 
-                                // ĐÂY LÀ CỘT NOTE BẠN YÊU CẦU
                                 Forms\Components\Textarea::make('email_note')
-                                    ->label('Email Note')
-                                    ->placeholder('Lưu ý riêng cho email này...'),
+                                    ->label(__('system.labels.note'))
+                                    ->placeholder(__('system.placeholders.email_note_helper')),
                             ]),
 
                         Forms\Components\TextInput::make('password')
-                            ->label('Platform Password')
-                            ->password() // Tự động ẩn mật khẩu khi nhập
-                            ->revealable() // Thêm icon con mắt để bấm xem
-                            ->required(),
+                            ->label(__('system.labels.password'))
+                            ->password()
+                            ->revealable()
+                            ->required()
+                            ->disabled(fn() => !auth()->user()?->isAdmin()),
 
                         Forms\Components\Select::make('state')
-                            ->label('States')
-                            ->placeholder('Select state')
-                            ->options(self::$usStates),
+                            ->label(__('system.labels.state_us'))
+                            ->placeholder(__('system.placeholders.select_state'))
+                            ->options(self::$usStates)
+                            ->disabled(fn() => !auth()->user()?->isAdmin()),
 
                         Forms\Components\TextInput::make('device')
-                            ->label('Device/Antidetect Create')
-                            ->placeholder('iPhone 13, Windows 10, BitBrowser...'),
+                            ->label(__('system.labels.device_create'))
+                            ->placeholder(__('system.placeholders.device_placeholder'))
+                            ->disabled(fn() => !auth()->user()?->isAdmin()),
 
-                        Forms\Components\Textarea::make('paypal_info')
-                            ->label('PayPal Information')
-                            ->placeholder('Full name, Full address...'),
-                        //->columnSpanFull(),
+                        Forms\Components\TextInput::make('account_created_at')
+                            ->label(__('system.labels.date_create'))
+                            ->placeholder(__('system.placeholders.date_format'))
+                            ->nullable()
+                            ->default(null)
+                            ->mask('99/99/9999')
+                            ->rules(['date_format:d/m/Y'])
+                            ->disabled(fn() => !auth()->user()?->isAdmin())
+                            ->dehydrateStateUsing(function ($state) {
+                                if (blank($state))
+                                    return null;
+                                try {
+                                    return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
+                                } catch (\Exception $e) {
+                                    return null;
+                                }
+                            }),
 
-                        Forms\Components\Textarea::make('device_linked_paypal')
-                            ->label('Device/Antidetect Linked PayPal')
-                            ->placeholder('iPhone 13, Windows 10, BitBrowser...'),
+                        Forms\Components\TextInput::make('paypal_info')
+                            ->label(__('system.labels.paypal_address'))
+                            ->placeholder(__('system.placeholders.paypal_info_placeholder'))
+                            ->disabled(fn() => !auth()->user()?->isAdmin()),
+
+                        Forms\Components\TextInput::make('device_linked_paypal')
+                            ->label(__('system.labels.device_linked_paypal'))
+                            ->placeholder(__('system.placeholders.device_placeholder'))
+                            ->disabled(fn() => !auth()->user()?->isAdmin()),
+
+                        Forms\Components\TextInput::make('paypal_linked_at')
+                            ->label(__('system.labels.linked_paypal_date'))
+                            ->placeholder(__('system.placeholders.date_format'))
+                            ->nullable()
+                            ->default(null)
+                            ->mask('99/99/9999')
+                            ->rules(['date_format:d/m/Y'])
+                            ->disabled(fn() => !auth()->user()?->isAdmin())
+                            ->dehydrateStateUsing(function ($state) {
+                                if (blank($state))
+                                    return null;
+                                try {
+                                    return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
+                                } catch (\Exception $e) {
+                                    return null;
+                                }
+                            }),
+
+                        Forms\Components\Select::make('user_id')
+                            ->relationship('user', 'name')
+                            ->label(__('system.labels.holder'))
+                            ->searchable()
+                            ->preload()
+                            ->disabled(fn() => !auth()->user()?->isAdmin()),
 
                         Forms\Components\Select::make('status')
-                            ->multiple() // Cho phép chọn nhiều cái cùng lúc
+                            ->label(__('system.labels.status'))
+                            ->multiple()
                             ->options([
-                                'active' => 'Active',
-                                'used' => 'In Use',
-                                'banned' => 'Banned',
-                                'no_paypal_needed' => 'No PayPal Required',
-                                'not_linked' => 'Not Linked to PayPal',
-                                'limited' => 'PayPal Limited',
-                                'linked' => 'Linked PayPal',
-                                'unlinked' => 'Unlinked PayPal',
+                                'active' => __('system.status.active'),
+                                'used' => __('system.status.used'),
+                                'banned' => __('system.status.banned'),
+                                'no_paypal_needed' => __('system.status.no_paypal_required'),
+                                'not_linked' => __('system.status.not_linked_paypal'),
+                                'limited' => __('system.status.paypal_limited'),
+                                'linked' => __('system.status.linked_paypal'),
+                                'unlinked' => __('system.status.unlinked_paypal'),
                             ])
                             ->searchable()
                             ->preload()
-                            ->native(false), // Dùng giao diện hiện đại của Filament
-
-                        // --- CHÈN ĐOẠN MÃ CỦA BẠN VÀO ĐÂY ---
-                        Forms\Components\Select::make('user_id')
-                            ->relationship('user', 'name')
-                            ->label('Holder')
-                            ->searchable()
-                            ->preload(),
-
-                        //Thêm ngày tạo tài khoản
-                        Forms\Components\TextInput::make('account_created_at')
-                            ->label('Date Create')
-                            ->placeholder('dd/mm/yyyy (Leave blank if it doesn\'t exist)')
-                            //->displayFormat('d/m/Y') // Định dạng hiển thị khi nhập
-                            //->format('Y-m-d') // Định dạng chuẩn để lưu vào MySQL
-                            //->native(false) // Dùng giao diện hiện đại của Filament
-                            ->nullable() // Cho phép để trống
-                            ->default(null) // Đảm bảo không tự động lấy ngày hiện tại
-                            ->mask('99/99/9999') // Tạo khuôn dd/mm/yyyy khi gõ
-                            ->rules(['date_format:d/m/Y'])
-                            //->dehydrated(true), // Đảm bảo trường này được gửi về backend
-                            //->live(),  // Đồng bộ dữ liệu ngay lập tức,
-                            ->dehydrateStateUsing(function ($state) {
-                                if (blank($state))
-                                    return null;
-                                try {
-                                    // Dịch từ chuẩn VN (d/m/Y) sang chuẩn Quốc tế (Y-m-d) để MySQL hiểu
-                                    return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
-                                } catch (\Exception $e) {
-                                    return null;
-                                }
-                            }),
-
-                        //Thêm ngày linked paypal
-                        Forms\Components\TextInput::make('paypal_linked_at')
-                            ->label('Date Linked PayPal')
-                            ->placeholder('dd/mm/yyyy (Leave blank if it doesn\'t exist)')
-                            //->displayFormat('d/m/Y') // Định dạng hiển thị khi nhập
-                            //->format('Y-m-d') // Định dạng chuẩn để lưu vào MySQL
-                            //->native(false) // Dùng giao diện hiện đại của Filament
-                            ->nullable() // Cho phép để trống
-                            ->default(null) // Đảm bảo không tự động lấy ngày hiện tại
-                            ->mask('99/99/9999') // Tạo khuôn dd/mm/yyyy khi gõ
-                            ->rules(['date_format:d/m/Y'])
-                            //->dehydrated(true), // Đảm bảo trường này được gửi về backend
-                            //->live(),  // Đồng bộ dữ liệu ngay lập tức,
-                            ->dehydrateStateUsing(function ($state) {
-                                if (blank($state))
-                                    return null;
-                                try {
-                                    // Dịch từ chuẩn VN (d/m/Y) sang chuẩn Quốc tế (Y-m-d) để MySQL hiểu
-                                    return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
-                                } catch (\Exception $e) {
-                                    return null;
-                                }
-                            }),
+                            ->disabled(fn() => !auth()->user()?->isAdmin())
+                            ->native(false),
 
                         Forms\Components\Textarea::make('note')
-                            ->label('Note')
-                            ->placeholder('Enter any special notes for this account if applicable...')
-                            ->columnSpanFull(), // Chiếm trọn 2 cột nếu bạn đang chia grid
-                        // -----------------------------------
+                            ->label(__('system.labels.note'))
+                            ->placeholder(__('system.placeholders.account_note_helper')),
                     ])
-                    ->columns(2) // Chia làm 2 cột cho đẹp
+                    ->columns(2)
+                    ->extraAttributes([
+                        'style' => 'overflow: visible !important; z-index: 50 !important; position: relative;',
+                        'class' => '!overflow-visible !z-50',
+                    ])
             ]);
     }
 
@@ -195,119 +191,117 @@ trait HasAccountSchema
     {
         return $infolist
             ->schema([
-                // PHẦN 1: EMAIL INFORMATION
-                \Filament\Infolists\Components\Section::make('Email Information')
+                \Filament\Infolists\Components\Section::make(__('system.heading_infolist.email_information'))
                     ->schema([
                         \Filament\Infolists\Components\TextEntry::make('email.email')
-                            ->label('Email Address')
-                            ->placeholder('N/A')
-                            ->copyable(), // Cho phép click để copy nhanh
+                            ->label(__('system.labels.email_address'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('email.email_password')
-                            ->label('Email Password')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.password'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('email.recovery_email')
-                            ->label('Recovery Email')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.account_email'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('email.two_factor_code')
-                            ->label('2FA/Code')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.two_factor_code'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('email.note')
-                            ->label('Note (Email)')
-                            ->placeholder('N/A'),
-                        //->columnSpanFull(),
+                            ->label(__('system.labels.note'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('email.status')
-                            ->label('Status')
-                            ->placeholder('N/A')
+                            ->label(__('system.labels.status'))
+                            ->placeholder(__('system.n/a'))
                             ->formatStateUsing(fn(string $state): string => match ($state) {
-                                'active' => 'Live',
-                                'disabled' => 'Disabled',
-                                'locked' => 'Locked',
-                                default => ucfirst($state),
+                                'active', 'Live' => __('system.email_status.active'),
+                                'disabled', 'Disabled' => __('system.email_status.disabled'),
+                                'locked', 'Locked' => __('system.email_status.locked'),
+                                default => __('system.email_status.' . $state),
                             })
                             ->color(fn(string $state): string => match ($state) {
-                                'active' => 'success', // Màu xanh cho Live
-                                'disabled' => 'warning',  // Màu vàng cho Disabled
-                                'locked' => 'danger', // Màu đỏ cho Locked
+                                'active', 'Live' => 'success',
+                                'disabled', 'Disabled' => 'warning',
+                                'locked', 'Locked' => 'danger',
                                 default => 'gray',
                             })
                     ])->columns(2),
 
-                // PHẦN 2: PLATFORM & SOURCE INFORMATION
-                \Filament\Infolists\Components\Section::make('Platform & Source Information')
+                \Filament\Infolists\Components\Section::make(__('system.heading_infolist.account_information'))
                     ->schema([
                         \Filament\Infolists\Components\TextEntry::make('platform')
-                            ->label('Platform')
-                            ->placeholder('N/A')
+                            ->label(__('system.labels.platform'))
+                            ->placeholder(__('system.n/a'))
                             ->formatStateUsing(fn($state) => $state ? (\App\Models\Platform::where('slug', $state)->value('name') ?? $state) : 'N/A'),
                         \Filament\Infolists\Components\TextEntry::make('password')
-                            ->label('Platform Password')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.password'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('state')
-                            ->label('State')
-                            ->placeholder('N/A')
+                            ->label(__('system.labels.state_us'))
+                            ->placeholder(__('system.n/a'))
                             ->formatStateUsing(fn($state) => $state ? "{$state} - " . (self::$usStates[$state] ?? '') : 'N/A'),
                         \Filament\Infolists\Components\TextEntry::make('device')
-                            ->label('Device Create')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.device'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('account_created_at')
-                            ->label('Date Create')
+                            ->label(__('system.labels.date_create'))
                             ->dateTime('d/m/Y')
-                            ->placeholder('N/A'),
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('user.name')
-                            ->label('Holder')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.holder'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('status')
-                            ->label('Platform Status')
+                            ->label(__('system.labels.status'))
                             ->badge()
-                            ->placeholder('N/A')
+                            ->placeholder(__('system.n/a'))
+                            ->columnSpanFull()
                             ->color(fn(string $state): string => match ($state) {
-                                'active' => 'gray',    // Màu xám nhạt
-                                'used' => 'info',    // Màu xanh dương nhạt
-                                'no_paypal_needed' => 'warning', // Màu xanh dương đậm
-                                'not_linked' => 'warning', // Màu vàng nhạt
-                                'linked' => 'success', // Màu xanh lá nhạt
-                                'limited' => 'danger',   // Màu đỏ đậm
-                                'unlinked' => 'warning', // Màu vàng nhạt
-                                'banned' => 'danger',  // Màu đỏ đậm
+                                'active' => 'gray',
+                                'used' => 'info',
+                                'no_paypal_needed' => 'warning',
+                                'not_linked' => 'warning',
+                                'linked' => 'success',
+                                'limited' => 'danger',
+                                'unlinked' => 'warning',
+                                'banned' => 'danger',
                                 default => 'gray',
                             })
-                            ->separator(',') // Hiển thị các nhãn cách nhau bằng dấu phẩy
+                            ->separator(',')
                             ->formatStateUsing(fn(string $state): string => match ($state) {
-                                'used' => 'In Use', // Đổi nhãn used thành In Use cho rõ nghĩa hơn
-                                'limited' => 'PayPal Limited', // Đổi riêng nhãn limited 
-                                'linked' => 'Linked PayPal', // Đổi nhãn linked cho rõ ràng
-                                'unlinked' => 'Unlinked PayPal', // Đổi nhãn unlinked
-                                'not_linked' => 'Not Linked to PayPal', // Đổi nhãn not_linked
-                                'no_paypal_needed' => 'No PayPal Required', // Đổi nhãn no_paypal_needed
-                                default => ucfirst($state), // Các nhãn khác chỉ viết hoa chữ cái đầu
+                                'active' => __('system.status.active'),
+                                'used' => __('system.status.used'),
+                                'limited' => __('system.status.paypal_limited'),
+                                'linked' => __('system.status.linked_paypal'),
+                                'unlinked' => __('system.status.unlinked_paypal'),
+                                'not_linked' => __('system.status.not_linked_paypal'),
+                                'no_paypal_needed' => __('system.status.no_paypal_required'),
+                                'banned' => __('system.status.banned'),
+                                default => __('system.status.' . $state),
                             }),
                         \Filament\Infolists\Components\TextEntry::make('note')
-                            ->label('Platform Note')
-                            ->placeholder('N/A')
+                            ->label(__('system.labels.note'))
+                            ->placeholder(__('system.n/a'))
                             ->columnSpanFull()
-                            ->html() // Cho phép tự định nghĩa HTML để ép khoảng cách
+                            ->html()
                             ->formatStateUsing(fn($state) => $state ? '
                                 <div style="
                                     white-space: pre-wrap;
-                                    line-height: 1.6; /* Thu hẹp tối đa khoảng cách giữa các dòng */
+                                    line-height: 1.6;
                                     margin: 0;
                                     padding: 0;
                                 ">' . e(trim($state)) . '</pre>' : 'N/A'),
                     ])->columns(3),
 
-                // PHẦN 3: PAYPAL INFORMATION
-                \Filament\Infolists\Components\Section::make('Paypal Information')
+                \Filament\Infolists\Components\Section::make(__('system.heading_infolist.paypal_information'))
                     ->schema([
                         \Filament\Infolists\Components\TextEntry::make('device_linked_paypal')
-                            ->label('Device Linked')
-                            ->placeholder('N/A'),
+                            ->label(__('system.labels.device'))
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('paypal_linked_at')
-                            ->label('Date Linked PayPal')
+                            ->label(__('system.labels.linked_paypal_date'))
                             ->dateTime('d/m/Y')
-                            ->placeholder('N/A'),
+                            ->placeholder(__('system.n/a')),
                         \Filament\Infolists\Components\TextEntry::make('paypal_info')
-                            ->label('Personal Information')
-                            ->placeholder('N/A')
+                            ->label(__('system.labels.address'))
+                            ->placeholder(__('system.n/a'))
                             ->columnSpanFull(),
                     ])->columns(2),
             ]);
@@ -316,19 +310,19 @@ trait HasAccountSchema
     public static function table(Table $table): Table
     {
         return $table
-            ->recordUrl(null) // Tắt link dẫn đến trang Edit khi click hàng
+            ->recordUrl(null)
             ->columns([
                 Tables\Columns\TextColumn::make('id')
                     ->label('ID')
                     ->alignment(Alignment::Center)
-                    ->searchable() // Cho phép tìm kiếm theo ID
-                    ->toggleable() // Mặc định ẩn, khi nào cần thì bật lên cho đỡ chật bảng (isToggledHiddenByDefault: true)
+                    ->searchable()
+                    ->toggleable()
                     ->extraHeaderAttributes(['style' => 'width: 60px; min-width: 60px'])
                     ->extraAttributes(['style' => 'width: 60px; min-width: 60px'])
                     ->color('gray'),
 
-                // Hiển thị nền tảng (Rakuten, PayPal...)
                 Tables\Columns\TextColumn::make('platform')
+                    ->label(__('system.labels.platform'))
                     ->searchable()
                     ->alignment(Alignment::Center)
                     ->extraHeaderAttributes(['style' => 'width: 80px; min-width: 80px'])
@@ -336,10 +330,8 @@ trait HasAccountSchema
                     ->visible(static::class === \App\Filament\Resources\AccountResource::class)
                     ->formatStateUsing(fn($state) => $state ? (\App\Models\Platform::where('slug', $state)->value('name') ?? $state) : 'N/A'),
 
-                // HIỂN THỊ EMAIL TỪ BẢNG LIÊN KẾT
-                // Lấy từ quan hệ email() trong Model Account
                 TextColumn::make('email.email')
-                    ->label('Email Address')
+                    ->label(__('system.labels.email_address'))
                     ->alignment(Alignment::Center)
                     ->extraHeaderAttributes(['style' => 'width: 250px; min-width: 250px'])
                     ->extraAttributes(['style' => 'width: 250px; min-width: 250px'])
@@ -348,20 +340,19 @@ trait HasAccountSchema
                     ->action(fn() => null)
                     ->html()
                     ->formatStateUsing(function (Account $record): string {
-                        $email = $record->email?->email ?? 'N/A';
-                        $platformPass = $record->password ?? 'N/A';
-                        $pass = $record->email?->email_password ?? 'N/A';
-                        $rec = $record->email?->recovery_email ?? 'N/A';
-                        $twoFA = $record->email?->two_factor_code ?? 'N/A';
-                        $emailNote = $record->email?->note ?? 'N/A'; // Lấy Note từ bảng Email
+                        $email = $record->email?->email ?? __('system.n/a');
+                        $platformPass = $record->password ?? __('system.n/a');
+                        $pass = $record->email?->email_password ?? __('system.n/a');
+                        $rec = $record->email?->recovery_email ?? __('system.n/a');
+                        $twoFA = $record->email?->two_factor_code ?? __('system.n/a');
+                        $emailNote = $record->email?->note ?? __('system.n/a');
                         $emailStatus = $record->email?->status ?? '';
-                        // Lấy label status chuẩn
                         [$emailstatusLabels, $emailstatusLabelsColor] = match (strtolower($emailStatus)) {
-                            'active', 'live' => ['Live', '#22c55e'],
-                            'disabled' => ['Disabled', '#f59e0b'],
-                            'locked' => ['Locked', '#ef4444'],
+                            'active', 'live' => [__('system.email_status.active'), '#22c55e'],
+                            'disabled' => [__('system.email_status.disabled'), '#f59e0b'],
+                            'locked' => [__('system.email_status.locked'), '#ef4444'],
                             default => [
-                                (blank($emailStatus) || strtolower($emailStatus) === 'n/a') ? 'N/A' : ucfirst($emailStatus),
+                                (blank($emailStatus) || strtolower($emailStatus) === 'n/a') ? 'N/A' : __('system.email_status.' . $emailStatus),
                                 '#6b7280'
                             ],
                         };
@@ -373,58 +364,58 @@ trait HasAccountSchema
                                           x-on:click.stop.prevent='window.navigator.clipboard.writeText(\"{$email}\"); copied = \"email\"; setTimeout(() => copied = null, 5000)'
                                           onclick='event.stopPropagation();'>
                                         {$email}
-                                        <span x-show='copied === \"email\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ Copied!</span>
+                                        <span x-show='copied === \"email\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ " . __('system.labels.copied') . "</span>
                                     </span>
                                 </div>
 
                                 <div style='margin-bottom: 2px;'>
-                                    <span style='color: #64748b;'>Platform Password: </span> 
+                                    <span style='color: #64748b;'>" . __('system.labels.password_account') . ": </span> 
                                     <span style='color: #1e293b; cursor: pointer; position: relative;' 
                                           x-on:click.stop.prevent='window.navigator.clipboard.writeText(\"{$platformPass}\"); copied = \"platform\"; setTimeout(() => copied = null, 5000)'
                                           onclick='event.stopPropagation();'>
                                         {$platformPass}
-                                        <span x-show='copied === \"platform\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ Copied!</span>
+                                        <span x-show='copied === \"platform\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ " . __('system.labels.copied') . "</span>
                                     </span>
                                 </div>
                                 
                                 <div style='margin-bottom: 2px;'>
-                                    <span style='color: #64748b;'>Email Password: </span> 
+                                    <span style='color: #64748b;'>" . __('system.labels.password_email') . ": </span> 
                                     <span style='color: #1e293b; cursor: pointer; position: relative;' 
                                           x-on:click.stop.prevent='window.navigator.clipboard.writeText(\"{$pass}\"); copied = \"pass\"; setTimeout(() => copied = null, 5000)'
                                           onclick='event.stopPropagation();'>
                                         {$pass}
-                                        <span x-show='copied === \"pass\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ Copied!</span>
+                                        <span x-show='copied === \"pass\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ " . __('system.labels.copied') . "</span>
                                     </span>
                                 </div>
 
                                 <div style='margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: wrap;'>
-                                    <span style='color: #64748b;'>Recovery Email: </span> 
+                                    <span style='color: #64748b;'>" . __('system.labels.recovery_email') . ": </span> 
                                     <span style='color: #1e293b; cursor: pointer; position: relative;' 
                                           x-on:click.stop.prevent='window.navigator.clipboard.writeText(\"{$rec}\"); copied = \"rec\"; setTimeout(() => copied = null, 5000)'
                                           onclick='event.stopPropagation();'>
                                         {$rec}
-                                        <span x-show='copied === \"rec\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ Copied!</span>
+                                        <span x-show='copied === \"rec\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ " . __('system.labels.copied') . "</span>
                                     </span>
                                 </div>
 
                                 <div style='margin-bottom: 2px;'>
-                                    <span style='color: #64748b;'>2FA/Code: </span> 
+                                    <span style='color: #64748b;'>" . __('system.labels.two_factor_code') . ": </span> 
                                     <span style='color: #1e293b; cursor: pointer; position: relative;' 
                                           x-on:click.stop.prevent='window.navigator.clipboard.writeText(\"{$twoFA}\"); copied = \"twoFA\"; setTimeout(() => copied = null, 5000)'
                                           onclick='event.stopPropagation();'>
                                         {$twoFA}
-                                        <span x-show='copied === \"twoFA\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ Copied!</span>
+                                        <span x-show='copied === \"twoFA\"' x-cloak style='display: none; position: absolute; left: 100%; top: 0; color: #059669; font-weight: 700; font-size: 11px; margin-left: 8px; white-space: nowrap;'>✓ " . __('system.labels.copied') . "</span>
                                     </span>
                                 </div>
                             
                                 <div style='margin-top: 8px; padding-top: 4px; border-top: 1px solid #f1f5f9; line-height: 1.8;'>
                                     <div style='margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: wrap;'>
-                                        <span style='color: #64748b;'>Status: </span> 
+                                        <span style='color: #64748b;'>" . __('system.labels.status') . ": </span> 
                                         <span style='color: {$emailstatusLabelsColor};'>{$emailstatusLabels}</span>
                                     </div>
 
                                     <div style='margin-bottom: 2px;'>
-                                        <span style='color: #64748b;'>Note: </span> 
+                                        <span style='color: #64748b;'>" . __('system.labels.note') . ": </span> 
                                         <span style='color: #1e293b;'>{$emailNote}</span>
                                     </div>
                                 </div>
@@ -432,11 +423,8 @@ trait HasAccountSchema
                         ";
                     }),
 
-
-
-                // Column Gộp: Metadata (States, Device, PayPal Information)
                 TextColumn::make('state')
-                    ->label('Source Information')
+                    ->label(__('system.labels.source_information'))
                     ->alignment(Alignment::Center)
                     ->toggleable()
                     ->width('250px')
@@ -447,7 +435,6 @@ trait HasAccountSchema
                     ->formatStateUsing(function (Account $record): string {
                         $stateCode = $record->state ?? 'N/A';
                         $stateName = self::$usStates[$stateCode] ?? '';
-                        // Nếu có tên bang thì hiện "CA - California", nếu không thì hiện "CA" hoặc "N/A"
                         $stateDisplay = $stateName ? "{$stateCode} - {$stateName}" : $stateCode;
 
                         $device = $record->device ?? 'N/A';
@@ -459,146 +446,123 @@ trait HasAccountSchema
                         return "
                             <div style='justify-content: flex-start !important; text-align: left; line-height: 1.6; max-width: 250px; padding-left: 0;'>
                                 <div style='margin-bottom: 2px;'>
-                                    <span style='color: #64748b;'>State:</span> 
+                                    <span style='color: #64748b;'>" . __('system.labels.state_us') . ":</span> 
                                     <span style='color: #1e293b; font-weight: 500;'>{$stateDisplay}</span>
                                 </div>
                 
                             <div style='margin-bottom: 2px;'>
-                                    <span style='color: #64748b;'>Device Create:</span> 
+                                    <span style='color: #64748b;'>" . __('system.labels.device') . ":</span> 
                                     <span style='color: #1e293b;'>{$device}</span>
                             </div>
 
                             <div style='margin-bottom: 2px;'>
-                                    <span style='color: #64748b;'>Date Create:</span> 
+                                    <span style='color: #64748b;'>" . __('system.labels.date_create') . ":</span> 
                                     <span style='color: #1e293b;'>{$created}</span>
                             </div>
                 
                             <div style='margin-top: 10px; overflow: hidden; text-overflow: ellipsis; white-space: wrap;'>
-                                    <span style='color: #64748b;'>PayPal Information:</span> 
+                                    <span style='color: #64748b;'>" . __('system.labels.address') . ":</span> 
                                     <span style='color: #3b82f6; font-weight: 500;'>{$paypal}</span>
                             </div>
                 
                             <div style='margin-top: 2px;'>
-                                    <span style='color: #64748b;'>Device Linked:</span> 
+                                    <span style='color: #64748b;'>" . __('system.labels.device') . ":</span> 
                                     <span style='color: #1e293b;'>{$devicePaypal}</span>
                             </div>
 
                             <div style='margin-bottom: 2px;'>
-                                    <span style='color: #64748b;'>Date Linked PayPal:</span> 
+                                    <span style='color: #64748b;'>" . __('system.labels.linked_paypal_date') . ":</span> 
                                     <span style='color: #1e293b;'>{$linked}</span>
                             </div>
                         </div>
                     ";
                     }),
 
-                // Column Platform Status hiển thị trạng thái bằng Badge
                 TextColumn::make('status')
-                    ->label('Platform Status')
+                    ->label(__('system.labels.status'))
                     ->badge()
                     ->alignment(Alignment::Center)
                     ->color(fn(string $state): string => match ($state) {
-                        'active' => 'gray',    // Màu xám nhạt
-                        'used' => 'info',    // Màu xanh dương nhạt
-                        'no_paypal_needed' => 'warning', // Màu xanh dương đậm
-                        'not_linked' => 'warning', // Màu vàng nhạt
-                        'linked' => 'success', // Màu xanh lá nhạt
-                        'limited' => 'danger',   // Màu đỏ đậm
-                        'unlinked' => 'warning', // Màu vàng nhạt
-                        'banned' => 'danger',  // Màu đỏ đậm
+                        'active' => 'gray',
+                        'used' => 'info',
+                        'no_paypal_needed' => 'warning',
+                        'not_linked' => 'warning',
+                        'linked' => 'success',
+                        'limited' => 'danger',
+                        'unlinked' => 'warning',
+                        'banned' => 'danger',
                         default => 'gray',
                     })
-                    ->separator(',') // Hiển thị các nhãn cách nhau bằng dấu phẩy
+                    ->separator(',')
                     ->formatStateUsing(fn(string $state): string => match ($state) {
-                        'used' => 'In Use', // Đổi nhãn used thành In Use cho rõ nghĩa hơn
-                        'limited' => 'PayPal Limited', // Đổi riêng nhãn limited 
-                        'linked' => 'Linked PayPal', // Đổi nhãn linked cho rõ ràng
-                        'unlinked' => 'Unlinked PayPal', // Đổi nhãn unlinked
-                        'not_linked' => 'Not Linked to PayPal', // Đổi nhãn not_linked
-                        'no_paypal_needed' => 'No PayPal Required', // Đổi nhãn no_paypal_needed
-                        default => ucfirst($state), // Các nhãn khác chỉ viết hoa chữ cái đầu
+                        'used' => __('system.status.used'),
+                        'limited' => __('system.status.paypal_limited'),
+                        'linked' => __('system.status.linked_paypal'),
+                        'unlinked' => __('system.status.unlinked_paypal'),
+                        'not_linked' => __('system.status.not_linked_paypal'),
+                        'no_paypal_needed' => __('system.status.no_paypal_required'),
+                        'banned' => __('system.status.banned'),
+                        default => __('system.status.' . $state),
                     })
                     ->tooltip(function (Tables\Columns\TextColumn $column, Account $record): string {
-                        // Lấy mảng các trạng thái hiện có của tài khoản
                         $statuses = is_array($record->status) ? $record->status : [$record->status];
-                        $explanations = [
-                            'active' => 'Tài khoản mới tạo, sẵn sàng để gán cho Holder.',
-                            'used' => 'Tài khoản đang trong quá trình sử dụng.',
-                            'limited' => 'PayPal bị giới hạn (Limited), cần gỡ hoặc kiểm tra.',
-                            'banned' => 'Tài khoản đã bị khóa, không thể sử dụng tiếp.',
-                            'linked' => 'Đã liên kết thành công với PayPal Account.',
-                            'unlinked' => 'Đã gỡ liên kết PayPal khỏi tài khoản này.',
-                            'not_linked' => 'Tài khoản chưa được liên kết với PayPal.',
-                            'no_paypal_needed' => 'Không yêu cầu liên kết với PayPal.',
-                        ];
-
-                        // Duyệt qua các trạng thái hiện có và lấy giải thích tương ứng
                         return collect($statuses)
-                            ->map(fn($s) => ($explanations[$s] ?? 'Trạng thái hệ thống'))
-                            ->join("\n"); // Các giải thích sẽ xuống dòng nếu có nhiều badge
-            
+                            ->map(fn($s) => match ($s) {
+                                'active' => __('system.accounts.status_explanations.active'),
+                                'used' => __('system.accounts.status_explanations.used'),
+                                'limited' => __('system.accounts.status_explanations.limited'),
+                                'banned' => __('system.accounts.status_explanations.banned'),
+                                'linked' => __('system.accounts.status_explanations.linked'),
+                                'unlinked' => __('system.accounts.status_explanations.unlinked'),
+                                'not_linked' => __('system.accounts.status_explanations.not_linked'),
+                                'no_paypal_needed' => __('system.accounts.status_explanations.no_paypal_needed'),
+                                default => __('system.accounts.status_explanations.default'),
+                            })
+                            ->join("\n");
                     }),
 
-                //Hiển thị ghi chú (note) nếu có, dưới dạng chữ nhỏ màu xanh dương
-                /* TextColumn::make('note')
-                    ->label('Note')
-                    ->alignment(Alignment::Center)
-                    ->limit(10) // Giữ hiển thị ngắn gọn ngoài bảng
-                    ->tooltip(fn($state) => $state) // Đây là nơi gửi dữ liệu xuống dòng vào Tooltip
-                    ->html()
-                    ->formatStateUsing(fn($state) => nl2br(e($state)) ?? 'N/A'), */
-
-                // Hiển thị người đang giữ tài khoản
                 TextColumn::make('user.name')
-                    ->label(__('system.holder'))
+                    ->label(__('system.labels.holder'))
                     ->alignment(Alignment::Center)
-                    // Nếu chưa có người nhận (null), chúng sẽ hiển thị N/A
                     ->default(__('system.unassigned'))
-
                     ->color(fn(Account $record) => $record->user_id === null ? 'gray' : 'default')
                     ->html()
-                    // CSS cho Get account
                     ->description(function (Account $record): ?\Illuminate\Support\HtmlString {
-                        if ($record->user_id === null) {
+                        if ($record->user_id === null && !auth()->user()?->isFinance()) {
                             return new \Illuminate\Support\HtmlString(
                                 '<span class = "get-account-btn">' . __('system.get_account') . '</span>'
                             );
                         }
                         return null;
                     })
-
                     ->extraAttributes(function (Account $record) {
                         $styles = 'font-weight: 400 !important; line-height: 1.2;';
-
-                        if ($record->user_id === null) {
+                        if ($record->user_id === null && !auth()->user()?->isFinance()) {
                             return [
                                 'class' => 'cursor-pointer transition hover:opacity-70',
-                                // Tuyệt chiêu: Gọi Action chính chủ của Filament
                                 'wire:click.stop' => "mountTableAction('get_account', '{$record->id}')",
                             ];
                         }
                         return ['style' => $styles];
                     }),
             ])
-
-            ->persistFiltersInSession() // Ghi nhớ bộ lọc trong phiên làm việc
+            ->persistFiltersInSession()
             ->filters([
-                // Lọc theo Status Email
                 SelectFilter::make('email_status')
-                    ->label('Email Status')
+                    ->label(__('system.labels.status'))
                     ->options([
-                        'active' => 'Live',
-                        'disabled' => 'Disabled',
-                        'locked' => 'Locked',
+                        'active' => __('system.status.live'),
+                        'disabled' => __('system.status.disabled'),
+                        'locked' => __('system.status.locked'),
                     ])
                     ->query(fn($query, $data) => $query->when(
                         $data['value'],
                         fn($q, $value) => $q->whereHas('email', fn($q) => $q->where('status', $value))
                     )),
 
-                // Lọc theo Platform (Rakuten, JoinHoney, ...)
                 SelectFilter::make('platform')
-                    ->label('Platform')
-                    ->multiple() // Cho phép tích nhiều checkbox
+                    ->label(__('system.labels.platform'))
+                    ->multiple()
                     ->options(function () {
                         $platforms = \App\Models\Account::query()
                             ->distinct()
@@ -606,27 +570,21 @@ trait HasAccountSchema
                             ->pluck('platform', 'platform')
                             ->map(fn($label) => (string) $label)
                             ->toArray();
-
-                        // 🟢 2. FORMAT LẠI NHÃN (LABEL) NGAY BÊN TRONG HÀM OPTIONS
                         $platforms_map = \App\Models\Platform::pluck('name', 'slug')->toArray();
                         $formattedOptions = [];
                         foreach ($platforms as $p) {
                             $formattedOptions[$p] = $platforms_map[$p] ?? $p;
                         }
-
                         return $formattedOptions;
                     })
                     ->searchable(),
 
-                // Lọc Date Create theo Year
                 Filter::make('year_created')
                     ->form([
                         \Filament\Forms\Components\Select::make('year')
-                            ->label('Year Create')
-                            ->placeholder('All Year')
-                            ->multiple() // Cho phép tích nhiều checkbox
+                            ->label(__('system.labels.year_created'))
+                            ->multiple()
                             ->options(function () {
-                                // Lấy tất cả năm từ cột account_created_at, sắp xếp mới nhất lên đầu
                                 return \App\Models\Account::query()
                                     ->selectRaw('YEAR(account_created_at) as year')
                                     ->whereNotNull('account_created_at')
@@ -643,11 +601,9 @@ trait HasAccountSchema
                         );
                     }),
 
-                // THÊM BỘ LỌC MỚI: Dành cho nhân viên lọc nhanh tài khoản của mình
                 Tables\Filters\TernaryFilter::make('my_accounts')
-                    ->label('Account Ownership')
-                    ->placeholder('All Accounts')
-                    ->trueLabel('My Accounts')
+                    ->label(__('system.account_claim.title'))
+                    ->trueLabel(__('system.labels.my_accounts'))
                     ->falseLabel(__('system.unassigned'))
                     ->queries(
                         true: fn(Builder $query) => $query->where('user_id', auth()->id()),
@@ -655,78 +611,59 @@ trait HasAccountSchema
                         blank: fn(Builder $query) => $query,
                     ),
 
-                //Lọc Holder (Quản lý nhân sự)
                 SelectFilter::make('user_id')
-                    ->label('Holder')
-                    ->visible(fn() => auth()->user()?->isAdmin()) // 🟢 CHỈ ADMIN MỚI THẤY
+                    ->label(__('system.labels.holder'))
+                    ->visible(fn() => auth()->user()?->isAdmin())
                     ->options(function () {
-                        // Lấy danh sách tất cả User
                         return \App\Models\User::query()
-                            ->whereNotNull('name') // Chỉ lấy User có tên
-                            ->where('name', '!=', '') // Loại bỏ chuỗi rỗng
+                            ->whereNotNull('name')
+                            ->where('name', '!=', '')
                             ->pluck('name', 'id')
-                            ->map(fn($name) => (string) $name) // Ép kiểu string chắc chắn
-                            ->prepend(__('system.unassigned'), 'unassigned') // Thêm N/A vào đầu danh sách
+                            ->map(fn($name) => (string) $name)
+                            ->prepend(__('system.unassigned'), 'unassigned')
                             ->toArray();
                     })
-
                     ->query(function (Builder $query, array $data) {
                         if ($data['value'] === 'unassigned') {
-                            // Nếu chọn N/A, lọc các bản ghi có user_id là null
                             return $query->whereNull('user_id');
                         }
-
-                        // Ngược lại, lọc theo ID của User bình thường
                         return $query->when($data['value'], fn($q, $id) => $q->where('user_id', $id));
                     })
                     ->searchable()
                     ->preload(),
-                Tables\Filters\TrashedFilter::make(), // 🟢 BẬT TÍNH NĂNG THÙNG RÁC
-
+                Tables\Filters\TrashedFilter::make(),
             ])
-
-
-            // Giới hạn số cột hiển thị trên 1 hàng (ví dụ 4 cột cho 4 bộ lọc)
-            ->filtersFormColumns(3)
-
-            // HIỂN THỊ DÀN HÀNG NGANG TRÊN ĐẦU BẢNG
+            ->filtersFormColumns(fn() => auth()->user()?->role === 'operator' ? 5 : 3)
             ->filtersLayout(FiltersLayout::AboveContent)
-
-
             ->actions([
-                // Hành động ẩn xử lý khi bấm vào chữ Get account từ cột Holder
                 Tables\Actions\Action::make('get_account')
                     ->label(__('system.get_account'))
-                    // Không dùng hidden() hay visible(false) vì sẽ gây lỗi khi gọi
-                    // Ẩn bằng CSS nhưng Action vẫn tồn tại trong hệ thống
+                    ->visible(fn() => !auth()->user()?->isFinance())
                     ->extraAttributes([
                         'style' => 'display: none !important;',
                     ])
-                    ->modalHeading(__('system.account_claim_title'))
+                    ->modalHeading(__('system.account_claim.title'))
                     ->modalWidth('md')
                     ->form(function (Account $record) {
                         $emailAddress = strtolower($record->email?->email ?? '');
                         $isGmail = str_ends_with($emailAddress, '@gmail.com');
 
                         if ($isGmail) {
-                            $warningTitle = __('system.gmail_warning_title');
-                            $warningDesc = __('system.gmail_warning_desc');
-
                             return [
                                 Forms\Components\Placeholder::make('warning')
                                     ->label('')
                                     ->content(new \Illuminate\Support\HtmlString('
                                         <div style="color: #dc2626; font-weight: bold; padding: 12px; background-color: #fef2f2; border-radius: 8px; border: 1px solid #fecaca; font-size: 14px; line-height: 1.5;">
-                                            ⚠️ ' . $warningTitle . '<br>
-                                            <span style="font-weight: 500; color: #991b1b; font-size: 13px;">' . $warningDesc . '</span>
+                                            ⚠️ ' . __('system.gmail_warning.title') . '<br>
+                                            <span style="font-weight: 500; color: #991b1b; font-size: 13px;">' . __('system.gmail_warning.desc') . '</span>
                                         </div>
                                     ')),
                                 Forms\Components\Checkbox::make('verified')
-                                    ->label(__('system.gmail_checkbox'))
+                                    ->label(__('system.gmail_warning.checkbox'))
                                     ->required()
                                     ->accepted()
                                     ->validationMessages([
-                                        'accepted' => __('system.gmail_checkbox_validation')
+                                        'accepted' => __('system.gmail_warning.validation')
                                     ]),
                             ];
                         }
@@ -734,78 +671,65 @@ trait HasAccountSchema
                         return [
                             Forms\Components\Placeholder::make('msg')
                                 ->label('')
-                                ->content(new \Illuminate\Support\HtmlString(__('system.account_claim_desc'))),
+                                ->content(new \Illuminate\Support\HtmlString(__('system.account_claim.desc'))),
                         ];
                     })
-                    ->modalSubmitActionLabel(__('system.account_claim_submit'))
+                    ->modalSubmitActionLabel(__('system.account_claim.submit'))
                     ->action(function (Account $record, array $data) {
-                        // Kiểm tra nếu tài khoản đang bị Banned thì báo lỗi
                         $statuses = is_array($record->status) ? $record->status : [$record->status];
 
                         if (in_array('banned', $statuses)) {
-                            \Filament\Notifications\Notification::make()
-                                ->title('Cannot claim a Banned account!')
+                            Notification::make()
+                                ->title(__('system.notifications.cannot_claim_banned'))
                                 ->danger()
                                 ->send();
                             return;
                         }
 
-                        // Kiểm tra nếu tài khoản chưa liên kết PayPal
                         if (in_array('not_linked', $statuses)) {
-                            \Filament\Notifications\Notification::make()
-                                ->title('Cannot claim! This account is not linked to PayPal.')
+                            Notification::make()
+                                ->title(__('system.notifications.cannot_claim_not_linked'))
                                 ->warning()
                                 ->send();
                             return;
                         }
 
-                        // update
                         $record->update(['user_id' => auth()->id()]);
 
-                        \Filament\Notifications\Notification::make()
-                            ->title(__('system.account_claimed_success'))
+                        Notification::make()
+                            ->title(__('system.account_claim.success'))
                             ->success()
                             ->send();
                     }),
 
-
-                // Nút Xem chi tiết (Hình con mắt) hiện ra bên ngoài
                 Tables\Actions\ViewAction::make()
-                    ->label('') // Để trống nhãn để chỉ hiện icon cho gọn
-                    ->modalHeading('Account Details') // TIÊU ĐỀ CỦA MODAL
-                    ->tooltip('Details') // Hiện ghi chú khi di chuột vào
+                    ->label('')
+                    ->modalHeading(__('system.account_claim.section_title'))
+                    ->tooltip(__('system.tooltips.details'))
                     ->icon('heroicon-o-eye')
-                    ->color('gray'), // Màu xám nhẹ nhàng, không lấn át nút cam
+                    ->color('gray'),
 
-                // Nút 3 chấm (Add Quick Order, Edit, Copy...)
                 Tables\Actions\ActionGroup::make([
-                    //Thêm đơn từ List accounts
                     Tables\Actions\Action::make('add_quick_order')
-                        ->label('Add Quick Order')
+                        ->label(__('system.actions.add_quick_order'))
                         ->icon('heroicon-m-plus-circle')
                         ->color('success')
+                        ->visible(fn() => !auth()->user()?->isFinance())
                         ->modalWidth('2xl')
-                        // Form hiện lên trong Pop-up (Modal)
                         ->form([
                             Forms\Components\Grid::make(2)
                                 ->schema([
                                     Forms\Components\TextInput::make('transaction_date')
-                                        ->label('Transaction date')
-                                        ->placeholder('dd/mm/yyyy')
-                                        //->displayFormat('d/m/Y')
-                                        //->format('Y-m-d') // Định dạng chuẩn để lưu vào MySQL
-                                        //->native(false)
-                                        ->nullable() // Cho phép để trống
-                                        ->default(null) // Đảm bảo không tự động lấy ngày hiện tại
-                                        ->mask('99/99/9999') // Tạo khuôn dd/mm/yyyy khi gõ
+                                        ->label(__('system.labels.transaction_date'))
+                                        ->placeholder(__('system.placeholders.date_format'))
+                                        ->nullable()
+                                        ->default(null)
+                                        ->mask('99/99/9999')
                                         ->rules(['date_format:d/m/Y'])
-                                        //->dehydrated(true), // Đảm bảo trường này được gửi về backend
-                                        //->live(),  // Đồng bộ dữ liệu ngay lập tức,
                                         ->dehydrateStateUsing(function ($state) {
                                             if (blank($state))
                                                 return null;
                                             try {
-                                                // Dịch từ chuẩn VN (d/m/Y) sang chuẩn Quốc tế (Y-m-d) để MySQL hiểu
                                                 return \Carbon\Carbon::createFromFormat('d/m/Y', $state)->format('Y-m-d');
                                             } catch (\Exception $e) {
                                                 return null;
@@ -813,26 +737,25 @@ trait HasAccountSchema
                                         }),
 
                                     Forms\Components\TextInput::make('store_name')
-                                        ->label('Store Name')
+                                        ->label(__('system.labels.store_name'))
                                         ->required()
                                         ->columnSpanFull(),
                                     Forms\Components\TextInput::make('order_id')
-                                        ->label('Order ID (#)'),
+                                        ->label(__('system.labels.order_id')),
                                     Forms\Components\TextInput::make('order_value')
-                                        ->label('Order Value ($)')
+                                        ->label(__('system.labels.order_value'))
                                         ->numeric()
                                         ->prefix('$')
                                         ->required()
                                         ->reactive(),
                                     Forms\Components\TextInput::make('cashback_percent')
-                                        ->label('% Cashback')
+                                        ->label(__('system.labels.cashback_percent'))
                                         ->numeric()
                                         ->default(10)
                                         ->suffix('%'),
                                 ]),
                         ])
                         ->action(function ($record, array $data) {
-                            // $record chính là Account đang chọn
                             RebateTracker::create([
                                 'account_id' => $record->id,
                                 'user_id' => auth()->id(),
@@ -842,397 +765,181 @@ trait HasAccountSchema
                                 'order_value' => $data['order_value'],
                                 'cashback_percent' => $data['cashback_percent'],
                                 'rebate_amount' => (float) $data['order_value'] * ($data['cashback_percent'] / 100),
-                                'status' => 'clicked', // Mặc định là đã click/mua
+                                'status' => 'clicked',
                             ]);
                         })
-                        ->successNotificationTitle('Added successfully!'),
+                        ->successNotificationTitle(__('system.notifications.added_successfully')),
 
-                    Tables\Actions\RestoreAction::make(), // 🟢 Nút khôi phục dòng bị xóa
+                    Tables\Actions\RestoreAction::make(),
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),
 
                     Tables\Actions\Action::make('copy_full_info')
-                        ->label('Copy')
+                        ->label(__('system.actions.copy'))
                         ->icon('heroicon-m-clipboard-document-check')
                         ->action(function ($record, $livewire) {
-
-                            //  Khai báo Header
                             $header = " | ID | Email Status | Year Created | Email Address | Email Password | Recovery Email | 2FA Code | Email Note | Platform | Platform Password | State | Device Create | Date Create | Platform Status | Platform Note | Holder | Personal Information | Device Linked | Date Linked PayPal | ";
-
-                            $id = $record->id; // Lấy ID của Account
-                
-                            // Lấy thông tin từ Email gốc
-                            $emailStatus = $record->email?->status ?? 'N/A'; // Lấy Status từ bảng Email
-                            // Chuyển đổi sang nhãn hiển thị Live/Disabled/Locked
+                            $id = $record->id;
+                            $emailStatus = $record->email?->status ?? 'N/A';
                             $emailstatusLabels = [
                                 'active' => 'Live',
                                 'disabled' => 'Disabled',
                                 'locked' => 'Locked',
                             ];
-                            $emailStatus = $emailstatusLabels[$emailStatus] ?? ucfirst($emailStatus); // Kết quả: "Active, Locked" hoặc "Disabled"
-                
-                            // Lấy ngày tạo từ bảng Email thay vì bảng Account
-                            $emailDateCreated = $record->email?->email_created_at ? $record->email->email_created_at->format('d/m/Y') : 'N/A';
-                            // Lấy năm từ email_created_at của Email, nếu không có thì lấy N/A
+                            $emailStatus = $emailstatusLabels[$emailStatus] ?? ucfirst($emailStatus);
                             $yearCreated = $record->email?->email_created_at ? $record->email->email_created_at->format('Y') : 'N/A';
-
                             $email = $record->email?->email ?? 'N/A';
                             $emailPass = $record->email?->email_password ?? 'N/A';
                             $recovery = $record->email?->recovery_email ?? 'N/A';
                             $twoFA = $record->email?->two_factor_code ?? 'N/A';
                             $emailNote = $record->email?->note ?? 'N/A';
-
-                            // Lấy thông tin từ Account (Platform)
                             $platform = $record->platform ?? 'N/A';
                             $platformPass = $record->password ?? 'N/A';
                             $stateName = self::$usStates[$record->state] ?? $record->state ?? 'N/A';
-                            // Định dạng Ngày tạo account (Nếu trống thì hiện "N/A")
                             $platformDateCreated = $record->account_created_at ? $record->account_created_at->format('d/m/Y') : 'N/A';
                             $device = $record->device ?? 'N/A';
                             $paypal = $record->paypal_info ?? 'N/A';
                             $devicePaypal = $record->device_linked_paypal ?? 'N/A';
-                            // Định dạng Ngày Linked PayPal (Nếu trống thì hiện "N/A")
                             $dateLinked = $record->paypal_linked_at ? $record->paypal_linked_at->format('d/m/Y') : 'N/A';
-                            $platformstatus = $record->status ? implode(', ', (array) $record->status) : 'N/A';
-                            $statusLabels = [
-                                'active' => 'Active',
-                                'used' => 'In Use',
-                                'limited' => 'PayPal Limited',
-                                'banned' => 'Banned',
-                                'linked' => 'Linked PayPal',
-                                'unlinked' => 'Unlinked PayPal',
-                                'not_linked' => 'Not Linked to PayPal',
-                                'no_paypal_needed' => 'No PayPal Required',
-                            ];
-                            // Chuyển mảng status (nếu có nhiều status) thành chuỗi nhãn đẹp
                             $currentStatuses = is_array($record->status) ? $record->status : explode(',', (string) $record->status);
-
                             $platformstatus = collect($currentStatuses)
-                                ->map(function ($s) use ($statusLabels) {
-                                    $key = trim($s); // Loại bỏ khoảng trắng thừa nếu có
-                                    return $statusLabels[$key] ?? ucfirst($key);
-                                })
-                                ->join(', '); // Kết quả: "Active, Not Linked to PayPal"
-                
+                                ->map(fn($s) => ucfirst(trim($s)))
+                                ->join(', ');
                             $note = $record->note ?? 'N/A';
                             $holder = $record->user?->name ?? 'N/A';
 
-
-
-                            // ĐỊNH DẠNG 1: Tất cả trên 1 dòng (Ngăn cách bằng dấu |)
                             $singleLine = " | {$id} | {$emailStatus} | {$yearCreated} | {$email} | {$emailPass} | {$recovery} | {$twoFA} | {$emailNote} | {$record->platform} | {$record->password} | {$stateName} | {$device} | {$platformDateCreated} | {$platformstatus} | {$note} | {$holder} | {$paypal} | {$devicePaypal} | {$dateLinked} | \n";
-                            $finalSingleLine = $header . "\n" . $singleLine; // Kết hợp header và data
-                
-                            // ĐỊNH DẠNG 2: Chia thành nhiều dòng chi tiết
-                            $multiLine =
-                                "EMAIL INFORMATION:\n" .
-                                "Email Status: {$emailStatus}\n" .
-                                "Year Created: {$yearCreated}\n" .
-                                "Email Address: {$email}\n" .
-                                "Email Password: {$emailPass}\n" .
-                                "Recovery Email: {$recovery}\n" .
-                                "2FA Code: {$twoFA}\n" .
-                                "Email Note: {$emailNote}\n" .
-                                "--------------------------\n" .
-                                "SOURCE & PLATFORM:\n" .
-                                "Platform: {$platform}\n" .
-                                "Platform Password: {$platformPass}\n" .
-                                "State: {$stateName}\n" .
-                                "Device Create: {$device}\n" .
-                                "Date Create: {$platformDateCreated}\n" .
-                                "Platform Status: {$platformstatus}\n" .
-                                "Platform Note: {$note}\n" .
-                                "Holder: {$holder}\n" .
-                                "--------------------------\n" .
-                                "PAYPAL INFORMATION:\n" .
-                                "Personal Information: {$paypal}\n" .
-                                "Device Linked: {$devicePaypal}\n" .
-                                "Date Linked PayPal: {$dateLinked}\n";
-
-                            // Gộp cả 2 định dạng vào 1 lần copy
+                            $finalSingleLine = $header . "\n" . $singleLine;
+                            $multiLine = "EMAIL INFORMATION:\n" . "Email Status: {$emailStatus}\n" . "Year Created: {$yearCreated}\n" . "Email Address: {$email}\n" . "Email Password: {$emailPass}\n" . "Recovery Email: {$recovery}\n" . "2FA Code: {$twoFA}\n" . "Email Note: {$emailNote}\n" . "--------------------------\n" . "SOURCE & PLATFORM:\n" . "Platform: {$platform}\n" . "Platform Password: {$platformPass}\n" . "State: {$stateName}\n" . "Device Create: {$device}\n" . "Date Create: {$platformDateCreated}\n" . "Platform Status: {$platformstatus}\n" . "Platform Note: {$note}\n" . "Holder: {$holder}\n" . "--------------------------\n" . "PAYPAL INFORMATION:\n" . "Personal Information: {$paypal}\n" . "Device Linked: {$devicePaypal}\n" . "Date Linked PayPal: {$dateLinked}\n";
                             $info = $finalSingleLine . "\n\n" . $multiLine;
-
-                            // Gửi sự kiện để JavaScript thực hiện copy
                             $livewire->dispatch('copy-to-clipboard', text: $info);
-
-                            \Filament\Notifications\Notification::make()
-                                ->title('Copied Successfully!')
+                            Notification::make()
+                                ->title(__('system.notifications.copied_successfully'))
                                 ->success()
                                 ->send();
                         }),
                 ])
             ])
-
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\BulkAction::make('export_accounts_to_google_sheet')
-                        ->label('Export to Google Sheet')
+                        ->label(__('system.actions.export_to_sheet'))
                         ->icon('heroicon-o-table-cells')
                         ->color('success')
-                        // 🔒 KHÓA: Chỉ Admin mới thấy
                         ->visible(fn() => auth()->user()?->isAdmin())
-                        ->action(function (Collection $records) {
-                            $sheetService = app(\App\Services\GoogleSheetService::class);
-                            // FIX: Nhóm theo platform trước, rồi upsert từng tab 1 lần.
-                            // Trước đây chỉ lấy platform của record đầu tiên → các platform khác bị đẩy sai tab.
-                            $grouped = $records->groupBy(fn($r) => $r->platform ?: 'General');
-
-                            $totalUpdated = 0;
-                            $totalAppended = 0;
-
-                            foreach ($grouped as $platform => $items) {
-                                $targetTab = ucfirst($platform) . '_Accounts';
-
-                                // Gom toàn bộ rows của platform này thành 1 mảng — 1 lần gọi API duy nhất
-                                $rows = $items
-                                    ->map(fn($r) => static::formatAccountForSheet($r))
-                                    ->values()
-                                    ->toArray();
-
-                                $sheetService->createSheetIfNotExist($targetTab);
-
-                                // FIX #3 (BulkAction): Truyền $headers để tab mới có hàng tiêu đề
-                                $result = $sheetService->upsertRows($rows, $targetTab, static::$accountHeaders);
-
-                                // Ép định dạng Clip
-                                $sheetService->formatColumnsAsClip($targetTab, 5, 6);   // Note Email (F)
-                                $sheetService->formatColumnsAsClip($targetTab, 14, 15); // Platform Note (O)
-                                $sheetService->formatColumnsAsClip($targetTab, 17, 18); // Personal Info (R)
-                
-                                $totalUpdated += $result['updated'];
-                                $totalAppended += $result['appended'];
+                        ->action(function (Collection $records, \App\Services\GoogleSyncService $syncService) {
+                            try {
+                                $syncService->syncAccounts($records);
+                                Notification::make()
+                                    ->title(__('system.notifications.synced_successfully'))
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                Notification::make()
+                                    ->title(__('system.notifications.sync_error'))
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
                             }
-
-                            \Filament\Notifications\Notification::make()
-                                ->title('Accounts Synced!')
-                                ->body("Updated {$totalUpdated}, Appended {$totalAppended} across " . $grouped->count() . ' tab(s).')
-                                ->success()
-                                ->send();
                         })
-                        ->deselectRecordsAfterCompletion(),  // Tự động bỏ tick sau khi xuất xong
+                        ->deselectRecordsAfterCompletion(),
 
                     Tables\Actions\BulkAction::make('get_bulk_accounts')
-                        ->label('Get Selected Accounts')
+                        ->label(__('system.actions.claim_selected'))
                         ->icon('heroicon-m-user-plus')
                         ->color('success')
+                        ->visible(fn() => !auth()->user()?->isFinance())
                         ->requiresConfirmation()
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
-                            $currentUserId = auth()->id(); // Lấy con số ID (ví dụ: 1, 2, 3)
-                
+                            $currentUserId = auth()->id();
                             foreach ($records as $record) {
-                                // Kiểm tra nếu chưa có ai nhận (user_id đang trống)
                                 if (empty($record->user_id)) {
-                                    $record->update([
-                                        'user_id' => $currentUserId,
-                                    ]);
-
-                                    // Ép buộc làm mới để giao diện nhận diện thay đổi
+                                    $record->update(['user_id' => $currentUserId]);
                                     $record->refresh();
                                 }
                             }
-                            \Filament\Notifications\Notification::make()
-                                ->title("Claimed Successfully!")
+                            Notification::make()
+                                ->title(__('system.notifications.claimed_successfully'))
                                 ->success()
                                 ->send();
                         })
-                        // QUAN TRỌNG: Lệnh này giúp Filament biết cần phải render lại bảng
                         ->deselectRecordsAfterCompletion(),
-
-
 
                     \Filament\Tables\Actions\ExportBulkAction::make()
                         ->exporter(\App\Filament\Exports\AccountExporter::class)
-                        ->label('Export Selected')
+                        ->label(__('system.actions.export_selected'))
                         ->icon('heroicon-m-arrow-down-tray')
                         ->color('success')
+                        ->visible(fn() => auth()->user()?->isAdmin())
+                        ->deselectRecordsAfterCompletion(),
+
+                    Tables\Actions\BulkAction::make('clear_date_create_selected')
+                        ->label(__('system.actions.clear_date_create'))
+                        ->icon('heroicon-m-x-circle')
+                        ->color('danger')
+                        ->visible(fn() => auth()->user()?->isAdmin())
+                        ->requiresConfirmation()
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            foreach ($records as $record) {
+                                $record->update(['account_created_at' => null]);
+                            }
+                            Notification::make()
+                                ->title(__('system.notifications.update_success'))
+                                ->success()
+                                ->send();
+                        })
                         ->deselectRecordsAfterCompletion(),
 
                     Tables\Actions\BulkAction::make('copy_account_selected')
-                        ->label('Copy Selected')
+                        ->label(__('system.actions.copy_selected'))
                         ->icon('heroicon-m-clipboard-document-list')
                         ->color('warning')
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records, $livewire) {
-                            // 1. Tạo hàng tiêu đề (Header)
                             $header = " | ID | Email Status | Year Created | Email Address | Email Password | Recovery Email | 2FA Code | Email Note | Platform | Platform Password | State | Device Create | Date Create | Platform Status | Platform Note | Holder | Personal Information | Device Linked | Date Linked PayPal | ";
                             $output = $header . "\n";
-
                             foreach ($records as $record) {
-                                $id = $record->id; // Lấy ID của Account
-                                // 2. Thu thập dữ liệu từ quan hệ Email và Account
-                                $emailStatus = $record->email?->status ?? 'N/A'; // Lấy Status từ bảng Email
-                                // Chuyển đổi sang nhãn hiển thị Live/Disabled/Locked
-                                $emailstatusLabels = [
-                                    'active' => 'Live',
-                                    'disabled' => 'Disabled',
-                                    'locked' => 'Locked',
-                                ];
-                                $emailStatus = $emailstatusLabels[$emailStatus] ?? ucfirst($emailStatus); // Kết quả: "Active, Locked" hoặc "Disabled"
-                
+                                $id = $record->id;
+                                $emailStatus = $record->email?->status ?? 'N/A';
+                                $emailstatusLabels = ['active' => 'Live', 'disabled' => 'Disabled', 'locked' => 'Locked'];
+                                $emailStatus = $emailstatusLabels[$emailStatus] ?? ucfirst($emailStatus);
                                 $yearCreated = $record->email?->email_created_at ? $record->email->email_created_at->format('Y') : 'N/A';
                                 $email = $record->email?->email ?? 'N/A';
                                 $emailPass = $record->email?->email_password ?? 'N/A';
                                 $recovery = $record->email?->recovery_email ?? 'N/A';
                                 $twoFA = $record->email?->two_factor_code ?? 'N/A';
-                                $emailNote = $record->email?->note ?? 'N/A'; // Email Note từ bảng Email
-                
-                                // Lấy thông tin từ Account (Platform)
+                                $emailNote = $record->email?->note ?? 'N/A';
                                 $platform = $record->platform ?? 'N/A';
-                                $passPlatform = $record->password ?? 'N/A';
-
-
-
-                                // Định dạng Ngày tạo account (Nếu trống thì hiện "N/A")
                                 $platformDateCreated = $record->account_created_at ? $record->account_created_at->format('d/m/Y') : 'N/A';
                                 $device = $record->device ?? 'N/A';
                                 $paypal = $record->paypal_info ?? 'N/A';
                                 $devicePaypal = $record->device_linked_paypal ?? 'N/A';
-
-                                // Định dạng Ngày Linked PayPal (Nếu trống thì hiện "N/A")
                                 $dateLinked = $record->paypal_linked_at ? $record->paypal_linked_at->format('d/m/Y') : 'N/A';
-
-
-                                $platformstatus = $record->status ? implode(', ', (array) $record->status) : 'N/A';
-                                $stateName = self::$usStates[$record->state] ?? $record->state ?? 'N/A';
-                                $statusLabels = [
-                                    'active' => 'Active',
-                                    'used' => 'In Use',
-                                    'limited' => 'PayPal Limited',
-                                    'banned' => 'Banned',
-                                    'linked' => 'Linked PayPal',
-                                    'unlinked' => 'Unlinked PayPal',
-                                    'not_linked' => 'Not Linked to PayPal',
-                                    'no_paypal_needed' => 'No PayPal Required',
-                                ];
-
-                                // XỬ LÝ STATUS CHUẨN: Chuyển "used, linked" thành "In Use, Linked PayPal"
                                 $currentStatuses = is_array($record->status) ? $record->status : [$record->status];
+                                $stateName = self::$usStates[$record->state] ?? $record->state ?? 'N/A';
                                 $platformstatus = collect($currentStatuses)
-                                    ->map(fn($s) => $statusLabels[$s] ?? ucfirst($s))
-                                    ->join(', '); // Đổi từ | sang dấu phẩy ở đây
-                
-                                $accNote = $record->note ?? 'N/A'; // Account Note
+                                    ->map(fn($s) => ucfirst(trim($s)))
+                                    ->join(', ');
+
+                                $accNote = $record->note ?? 'N/A';
                                 $holder = $record->user?->name ?? 'N/A';
 
-                                // 3. Gộp thành một dòng dữ liệu
                                 $output .= " | {$id} | {$emailStatus} | {$yearCreated} | {$email} | {$emailPass} | {$recovery} | {$twoFA} | {$emailNote} | {$record->platform} | {$record->password} | {$stateName} | {$device} | {$platformDateCreated} | {$platformstatus} | {$accNote} | {$holder} | {$paypal} | {$devicePaypal} | {$dateLinked} | \n";
                             }
 
-                            // Gửi lệnh copy tới trình duyệt
                             $livewire->dispatch('copy-to-clipboard', text: $output);
 
-                            // Thông báo thành công
-                            \Filament\Notifications\Notification::make()
-                                ->title('Copied Successfully!')
+                            Notification::make()
+                                ->title(__('system.actions.copied'))
                                 ->success()
                                 ->send();
                         })
-                        ->deselectRecordsAfterCompletion(), // Tự động bỏ chọn sau khi copy xong
-                    Tables\Actions\RestoreBulkAction::make(),     // 🟢 Khôi phục nhiều dòng
-                    Tables\Actions\DeleteBulkAction::make(),
+                        ->deselectRecordsAfterCompletion(),
+                    Tables\Actions\RestoreBulkAction::make()
+                        ->visible(fn() => auth()->user()?->isAdmin()),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn() => auth()->user()?->isAdmin()),
                 ]),
             ]);
-    }
-
-    // =========================================================
-    // DÁN ĐOẠN NÀY VÀO ĐÂY (NẰM NGOÀI HÀM TABLE)
-    // =========================================================
-    // 1. Khai báo 19 Header khớp với index 0 -> 18
-    public static array $accountHeaders = [
-        'ID',
-        'Email Address',
-        'Email Password',
-        'Recovery Email',
-        '2FA/Code',
-        'Note (Email)',
-        'Status (Email)',
-        'Platform',
-        'Platform Password',
-        'State Create',
-        'Device Create',
-        'Date Create',
-        'Platform Status',
-        'Holder',
-        'Platform Note',
-        'Device Linked',
-        'Date Linked PayPal',
-        'Personal Information',
-        'Last Sync'
-    ];
-
-    public static function formatAccountForSheet($record): array
-    {
-        // 1. Logic xử lý PLATFORM STATUS (Đã làm trước đó)
-        $rawStatuses = $record->status;
-        $statusArray = is_array($rawStatuses) ? $rawStatuses : (json_decode($rawStatuses, true) ?? [$rawStatuses]);
-        $mappedPlatformStatuses = array_map(function ($status) {
-            return match ($status) {
-                'used' => 'In Use',
-                'limited' => 'PayPal Limited',
-                'linked' => 'Linked PayPal',
-                'unlinked' => 'Unlinked PayPal',
-                'not_linked' => 'Not Linked to PayPal',
-                'no_paypal_needed' => 'No PayPal Required',
-                default => ucfirst(str_replace('_', ' ', (string) $status)),
-            };
-        }, array_filter($statusArray));
-        $platformStatusString = implode(' → ', $mappedPlatformStatuses);
-
-        // 2. Logic xử lý EMAIL STATUS (Yêu cầu mới của bạn)
-        $rawEmailStatus = $record->email?->status;
-        $emailStatusLabel = match ($rawEmailStatus) {
-            'active' => 'Live',
-            'disabled' => 'Disabled',
-            'locked' => 'Locked',
-            null => 'N/A',
-            default => ucfirst((string) $rawEmailStatus),
-        };
-
-        // 3. KHỞI TẠO KHUNG 19 CỘT (0 -> 18) ĐỂ TRÁNH LỖI JSON PAYLOAD 400
-        $data = array_fill(0, 19, '');
-
-        $data[0] = $record->id;                                                                                // ID
-        $data[1] = $record->email?->email ?? 'N/A';                                                            // Email Address
-        $data[2] = $record->email?->email_password ?? 'N/A';                                                   // Email Password
-        $data[3] = $record->email?->recovery_email ?? 'N/A';                                                   // Recovery Email
-        $data[4] = $record->email?->two_factor_code ?? 'N/A';                                                  // 2FA/Code
-        $data[5] = $record->email?->note ?? 'N/A';                                                             // Note (Email)
-        $data[6] = $emailStatusLabel;                                                                          // CỘT G: Status (Email) - ĐÃ APPLY MAP
-        $data[7] = $record->platform;                                                                          // Platform
-        $data[8] = $record->password;                                                                          // Platform Password
-        $data[9] = $record->state ? "{$record->state} - " . (self::$usStates[$record->state] ?? '') : 'N/A';   // State Create
-        $data[10] = $record->device ?? 'N/A';                                                                   // Device Create
-        $data[11] = $record->account_created_at?->format('d/m/Y') ?? 'N/A';                                     // Date Create        
-        $data[12] = $platformStatusString;                                                                      // Platform Status
-        $data[13] = $record->user?->name ?? 'N/A';                                                              // Holder
-        $data[14] = $record->note ?? '';                                                                        // Platform Note
-        $data[15] = $record->device_linked_paypal ?? 'N/A';                                                     // Device Linked
-        $data[16] = $record->paypal_linked_at?->format('d/m/Y') ?? 'N/A';                                       // Date Linked PayPal       
-        $data[17] = $record->paypal_info ?? 'N/A';                                                              // Personal Information
-        $data[18] = now()->format('d/m/Y H:i:s');                                                               // Last Sync
-
-        return array_values($data); // Đảm bảo mảng luôn liên tục (sequential)
-    }
-
-    public static function syncSingleAccountToSheet($record): void
-    {
-        // 1. Lấy dữ liệu 19 cột đã format
-        $row = static::formatAccountForSheet($record);
-        $sheetService = app(\App\Services\GoogleSheetService::class);
-
-        // 🟢 CẢI TIẾN: Nếu platform rỗng, dùng 'General' thay vì để nó ra '_Accounts'
-        $platform = $record->platform ?: 'General';
-        $targetTab = ucfirst($platform) . '_Accounts'; // FIX #2: ucfirst để đúng tên tab
-
-        // 2. Gọi hàm mới: Tìm ID ở cột A và ghi đè đúng hàng đó
-        // Truyền vào mảng [$row] vì hàm upsertRows nhận danh sách các hàng
-        // Đồng bộ vào Tab riêng (Ví dụ: Rakuten_Accounts hoặc General_Accounts)
-        // 🟢 CẢI TIẾN: Truyền thêm Header để tự tạo Tab mới chuẩn cột
-        $sheetService->upsertRows([$row], $targetTab, static::$accountHeaders);
-
-        // 3. Định dạng Clip riêng cho tab này
-        //$sheetService->formatColumnsAsClip($targetTab, 5, 6);   // Note Email (F)
-        //$sheetService->formatColumnsAsClip($targetTab, 14, 15); // Platform Note (O)
-        //$sheetService->formatColumnsAsClip($targetTab, 17, 18); // Personal Info (R)
     }
 
     // bootHasAccountSchema ĐÃ XÓA (FIX #7):

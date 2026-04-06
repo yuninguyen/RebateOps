@@ -24,10 +24,22 @@ class JoinHoneyResource extends Resource
     protected static ?string $model = Account::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static ?string $navigationGroup = 'RESOURCE HUB';
-    protected static ?string $navigationLabel = 'JoinHoney';
-    protected static ?string $navigationParentItem = 'All Platforms';
-    protected static ?int $navigationSort = 3; // Đặt thứ tự trong menu, ví dụ: 3 sẽ hiển thị sau 2 tài nguyên khác
+    protected static ?int $navigationSort = 3;
+
+    public static function getNavigationLabel(): string
+    {
+        return 'JoinHoney';
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'resource_hub';
+    }
+
+    public static function getNavigationParentItem(): ?string
+    {
+        return __('system.all_platforms');
+    }
 
     // Thêm dòng này để thu gọn menu bên trái, nhường chỗ cho bảng
     protected static bool $isScopedToTenant = false;
@@ -37,7 +49,7 @@ class JoinHoneyResource extends Resource
     // HÀM LỌC DỮ LIỆU: Chỉ lấy tài khoản của Join Honey
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->where('platform', 'JoinHoney');
+        $query = parent::getEloquentQuery()->where('platform', 'Join Honey');
 
         if (auth()->user()?->isAdmin()) {
             return $query;

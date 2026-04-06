@@ -19,9 +19,15 @@ class UserResource extends Resource
     protected static ?string $model = User::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static ?string $navigationGroup = 'Settings';
-    protected static ?int $navigationSort = 1; // Hiện trên Activity Log
-    protected static ?string $navigationLabel = 'Users';
+    public static function getNavigationGroup(): ?string
+    {
+        return 'settings';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('system.labels.user');
+    }
 
     // 🟢 1. ẨN MENU BÊN TRÁI: Chỉ Admin mới thấy menu "Users"
     public static function shouldRegisterNavigation(): bool
@@ -40,37 +46,38 @@ class UserResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Section::make('User Information')
-                    ->description('Manage login information and Holder identification.')
+                Forms\Components\Section::make(__('system.account_claim.section_title'))
+                    ->description(__('system.users.description'))
                     ->schema([
                         Forms\Components\TextInput::make('name')
-                            ->label('Name')
+                            ->label(__('system.labels.holder'))
                             ->required()
                             ->maxLength(255),
                         Forms\Components\TextInput::make('username')
-                            ->label('Username')
-                            ->placeholder('Eg: user01')
+                            ->label(__('system.labels.username'))
+                            ->placeholder(__('system.placeholders.username_hint'))
                             ->required()
                             ->unique(ignoreRecord: true) // Không báo lỗi trùng khi sửa chính user đó
                             ->maxLength(255)
                             ->prefix('@'), // Thêm icon @ cho chuyên nghiệp
                         Forms\Components\TextInput::make('email')
-                            ->label('Email Address')
+                            ->label(__('system.labels.email_address'))
                             ->email()
                             ->required()
                             ->unique(ignoreRecord: true), // Tránh trùng email
                         Forms\Components\Select::make('role')
-                            ->label('Role')
+                            ->label(__('system.labels.role'))
                             ->options([
-                                'admin' => 'Admin',
-                                'staff' => 'Staff',
+                                'admin' => __('system.roles.admin'),
+                                'finance' => __('system.roles.finance'),
+                                'operator' => __('system.roles.operator'),
                             ])
-                            ->default('staff')
+                            ->default('operator')
                             ->required()
                             ->native(false),
                         Forms\Components\TextInput::make('password')
-                            ->label('Password')
-                            ->placeholder('Leave it blank if you don\'t want to change your password.')
+                            ->label(__('system.labels.password'))
+                            ->placeholder(__('system.placeholders.password_hint'))
                             ->password()
                             ->revealable()
                             ->dehydrated(fn($state) => filled($state)) // Chỉ lưu nếu có nhập pass mới
@@ -85,25 +92,33 @@ class UserResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Name')
+                    ->label(__('system.labels.holder'))
                     ->searchable()
                     ->alignment(Alignment::Center),
 
                 Tables\Columns\TextColumn::make('username')
-                    ->label('Username')
+                    ->label(__('system.labels.username'))
                     ->searchable()
                     ->alignment(Alignment::Center),
                 Tables\Columns\TextColumn::make('email')
-                    ->label('Email Address')
+                    ->label(__('system.labels.email_address'))
                     ->copyable() // Cho phép click để copy nhanh email
                     ->searchable()
                     ->alignment(Alignment::Center),
                 Tables\Columns\TextColumn::make('role')
-                    ->label('Role')
+                    ->label(__('system.labels.role'))
                     ->formatStateUsing(fn(string $state): string => match ($state) {
-                        'admin' => 'Administrator',
-                        'staff' => 'Staff',
+                        'admin' => __('system.roles.admin'),
+                        'finance' => __('system.roles.finance'),
+                        'operator' => __('system.roles.operator'),
                         default => $state,
+                    })
+                    ->badge()
+                    ->color(fn(string $state): string => match ($state) {
+                        'admin' => 'danger',
+                        'finance' => 'info',
+                        'operator' => 'success',
+                        default => 'gray',
                     })
                     ->alignment(Alignment::Center),
             ])

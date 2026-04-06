@@ -5,7 +5,9 @@ namespace App\Observers;
 use App\Models\PayoutMethod;
 use App\Jobs\SyncGoogleSheetJob;
 
-class PayoutMethodObserver
+use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
+
+class PayoutMethodObserver implements ShouldHandleEventsAfterCommit
 {
     // Chạy sau khi Save (cả Create và Update)
     public function saved(PayoutMethod $payoutMethod): void

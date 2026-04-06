@@ -17,7 +17,7 @@ class SyncGoogleSheetJob implements ShouldQueue
     // 🟢 THÊM 3 DÒNG NÀY ĐỂ JOB TỰ ĐỘNG THỬ LẠI KHI GOOGLE LỖI
     public int $tries = 3;      // Thử lại tối đa 3 lần
     public int $backoff = 60;   // Đợi 60 giây giữa các lần thử
-    public int $timeout = 30;   // Ngắt Job nếu chạy quá 30 giây để tránh treo máy chủ
+    public int $timeout = 120;   // Ngắt Job nếu chạy quá 120 giây để tránh treo máy chủ
 
     /**
      * @param int         $recordId   ID của bản ghi cần sync
@@ -31,51 +31,23 @@ class SyncGoogleSheetJob implements ShouldQueue
         protected $modelClass,
         protected string $action = 'upsert',
         protected ?string $platform = null   // FIX #6: lưu platform vào job
-    ) {}
+    ) {
+    }
 
-    public function handle(GoogleSheetService $service): void
+    public function handle(\App\Services\GoogleSyncService $syncService): void
     {
         try {
-            $headers      = [];
-            $formattedRow = [];
-            $targetTabs   = [];
-
-            // ── 1. DELETE: dùng platform đã lưu trong constructor ──
+            // ── 1. Trường hợp DELETE ──
+            // Khi xóa, Model có thể đã mất khỏi DB nên chúng ta tạo object giả để lấy ID và Class
             if ($this->action === 'delete') {
-                switch ($this->modelClass) {
-                    case \App\Models\Email::class:
-                        $targetTabs = ['Emails'];
-                        break;
+                $record = new $this->modelClass;
+                $record->id = $this->recordId;
 
-                    case \App\Models\Account::class:
-                        // FIX #6: dùng platform đã lưu thay vì fallback General
-                        $p = $this->platform ? ucfirst($this->platform) : 'General';
-                        $targetTabs = [$p . '_Accounts'];
-                        break;
-
-                    case \App\Models\RebateTracker::class:
-                        // FIX #6: xóa cả tab tổng lẫn tab platform
-                        $p = $this->platform ? ucfirst($this->platform) : null;
-                        $targetTabs = ['All_Rebate_Tracker'];
-                        if ($p) $targetTabs[] = $p . '_Tracker';
-                        break;
-
-                    case \App\Models\PayoutLog::class:
-                        $targetTabs = ['Payout_Logs'];
-                        break;
-
-                    case \App\Models\PayoutMethod::class:
-                        $targetTabs = ['Payout_Methods'];
-                        break;
-                }
-
-                foreach ($targetTabs as $tabName) {
-                    $service->deleteRowsByIds([(string)$this->recordId], $tabName);
-                }
+                $syncService->syncRecord($record, 'delete', $this->platform);
                 return;
             }
 
-            // ── 2. Tìm bản ghi kèm relations ──
+            // ── 2. Trường hợp UPSERT: Tìm bản ghi kèm relations ──
             $record = $this->getRecordWithRelations();
 
             if (!$record) {
@@ -83,56 +55,9 @@ class SyncGoogleSheetJob implements ShouldQueue
                 return;
             }
 
-            // ── 3. MAPPING ──
-            switch ($this->modelClass) {
-                case \App\Models\Email::class:
-                    $resource     = \App\Filament\Resources\EmailResource::class;
-                    $targetTabs[] = 'Emails';
-                    $headers      = $resource::$emailHeaders;
-                    $formattedRow = $resource::formatEmailForSheet($record);
-                    break;
+            // ── 3. Đồng bộ dùng Service tập trung ──
+            $syncService->syncRecord($record, 'upsert');
 
-                case \App\Models\Account::class:
-                    $platform     = $record->platform ?: 'General';
-                    $targetTabs[] = ucfirst($platform) . '_Accounts'; // FIX #2: ucfirst
-                    $headers      = \App\Filament\Resources\AccountResource::$accountHeaders;
-                    $formattedRow = \App\Filament\Resources\AccountResource::formatAccountForSheet($record);
-                    break;
-
-                case \App\Models\RebateTracker::class:
-                    $platform   = $record->account?->platform ?: 'General';
-                    $targetTabs = ['All_Rebate_Tracker', ucfirst($platform) . '_Tracker']; // FIX #2: ucfirst
-                    $headers    = \App\Filament\Resources\RebateTrackerResource::$trackerHeaders;
-                    $formattedRow = \App\Filament\Resources\RebateTrackerResource::formatRecordForSheet($record);
-                    break;
-
-                case \App\Models\PayoutLog::class:
-                    $resource     = \App\Filament\Resources\PayoutLogResource::class;
-                    $targetTabs[] = 'Payout_Logs';
-                    $headers      = $resource::$payoutLogHeaders;
-                    $formattedRow = $resource::formatPayoutLogForSheet($record);
-                    break;
-
-                case \App\Models\PayoutMethod::class:
-                    $resource     = \App\Filament\Resources\PayoutMethodResource::class;
-                    $targetTabs[] = 'Payout_Methods';
-                    $headers      = $resource::$payoutMethodHeaders;
-                    $formattedRow = $resource::formatPayoutMethodForSheet($record);
-                    break;
-
-                default:
-                    Log::warning("SyncGoogleSheetJob: Unhandled modelClass [{$this->modelClass}]");
-                    return;
-            }
-
-            // ── 4. UPSERT ──
-            if (!empty($targetTabs) && !empty($formattedRow)) {
-                foreach ($targetTabs as $tabName) {
-                    $service->createSheetIfNotExist($tabName);
-                    $service->upsertRows([$formattedRow], $tabName, $headers);
-                    $this->applySpecificFormatting($service, $tabName);
-                }
-            }
         } catch (\Exception $e) {
             Log::error("SyncGoogleSheetJob Error [{$this->modelClass} #{$this->recordId}]: " . $e->getMessage());
             throw $e;
@@ -152,32 +77,5 @@ class SyncGoogleSheetJob implements ShouldQueue
         }
 
         return $query->withTrashed()->find($this->recordId);
-    }
-
-    protected function applySpecificFormatting(GoogleSheetService $service, string $tabName): void
-    {
-        if ($tabName === 'Payout_Logs') {
-            $service->formatColumnsAsClip($tabName, 16, 17);
-        } elseif ($tabName === 'Payout_Methods') {
-            $service->formatColumnsAsClip($tabName, 4, 8);
-            $service->formatColumnsAsClip($tabName, 25, 26);
-            $service->applyFormattingWithRules($tabName, 24, [
-                'Limited' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],
-            ]);
-        } elseif ($tabName === 'Emails') {
-            $service->formatColumnsAsClip($tabName, 2, 3);
-            $service->applyFormattingWithRules($tabName, 1, [
-                'Live'     => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
-                'Disabled' => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],
-            ]);
-        } elseif (str_ends_with($tabName, '_Accounts')) {
-            $service->formatColumnsAsClip($tabName, 5, 6);
-            $service->formatColumnsAsClip($tabName, 14, 15);
-            $service->formatColumnsAsClip($tabName, 17, 18);
-        } elseif (str_contains($tabName, '_Tracker')) {
-            $service->formatColumnsAsClip($tabName, 5, 6);
-            $service->formatColumnsAsClip($tabName, 15, 16);
-            $service->formatColumnsAsClip($tabName, 18, 19);
-        }
     }
 }

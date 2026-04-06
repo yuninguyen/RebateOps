@@ -24,22 +24,31 @@ class UserPaymentResource extends Resource
     protected static ?string $model = UserPayment::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static ?string $navigationGroup = 'WALLET & PAYOUTS';
-    protected static ?int $navigationSort = 3;
+    // protected static ?string $navigationGroup = 'Wallet & Payouts'; // Filament sẽ lấy text này so khớp với AdminPanelProvider đã localize
+    // protected static ?int $navigationSort = 3;
+
+    public static function getNavigationGroup(): ?string
+    {
+        return 'wallet_payout';
+    }
+    public static function getNavigationSort(): int
+    {
+        return 3;
+    }
 
     public static function getNavigationLabel(): string
     {
-        return __('system.revenue_split');
+        return __('system.labels.revenue_split');
     }
 
     public static function getModelLabel(): string
     {
-        return __('system.revenue_split');
+        return __('system.labels.revenue_split');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return __('system.revenue_split_list');
+        return __('system.labels.revenue_split_list');
     }
 
     // 🟢 1. PHÂN QUYỀN DỮ LIỆU: Staff chỉ thấy lương của mình
@@ -47,11 +56,15 @@ class UserPaymentResource extends Resource
     {
         // 🟢 Sắp xếp: Pending (desc) lên trên, sau đó mới đến Paid. Tiếp theo là Created At (desc)
         $query = parent::getEloquentQuery()
+            ->addSelect([
+                '*',
+                \Illuminate\Support\Facades\DB::raw("CASE WHEN transaction_type LIKE 'Gift Card%' THEN 'gift_card' ELSE 'paypal' END as asset_group")
+            ])
             ->orderBy('status', 'desc')
             ->orderBy('created_at', 'desc');
 
-        // Nếu không phải Admin, ép query chỉ tìm user_id của chính người đó
-        if (!auth()->user()?->isAdmin()) {
+        // Nếu không phải Admin và không phải Finance, ép query chỉ tìm user_id của chính người đó
+        if (!auth()->user()?->isAdmin() && !auth()->user()?->isFinance()) {
             $query->where('user_id', auth()->id());
         }
 
@@ -66,12 +79,12 @@ class UserPaymentResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return auth()->user()?->isAdmin(); // Chỉ Admin được sửa (để up bill)
+        return auth()->user()?->isAdmin() || auth()->user()?->isFinance(); // Admin & Finance được sửa (để up bill)
     }
 
     public static function canDelete(Model $record): bool
     {
-        return auth()->user()?->isAdmin();
+        return auth()->user()?->isAdmin() || auth()->user()?->isFinance();
     }
 
     // 🟢 3. FORM GIAO DIỆN (Dành cho Admin Up Bill)
@@ -79,26 +92,26 @@ class UserPaymentResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Section::make('Payment information')
+                Forms\Components\Section::make(__('system.labels.transaction_details'))
                     ->schema([
                         Forms\Components\Select::make('status')
-                            ->label('Status')
+                            ->label(__('system.labels.status'))
                             ->options([
-                                'pending' => '⏳ Pending',
-                                'paid' => '✅ Paid',
+                                'pending' => '⏳ ' . __('system.status.pending'),
+                                'paid' => '✅ ' . __('system.status.completed'),
                             ])
                             ->required()
                             ->native(false),
 
                         Forms\Components\FileUpload::make('payment_proof')
-                            ->label('Payment Proof')
+                            ->label(__('system.user_payments.fields.payment_proof'))
                             ->image()
                             ->directory('payment-proofs')
-                            ->openable() // Cho phép bấm vào để xem ảnh to
+                            ->openable()
                             ->downloadable(),
 
                         Forms\Components\Textarea::make('note')
-                            ->label('Note')
+                            ->label(__('system.labels.note'))
                             ->columnSpanFull(),
                     ])->columns(2),
             ]);
@@ -111,44 +124,49 @@ class UserPaymentResource extends Resource
             ->columns([
                 // Cột Tên Staff (Tự động ẩn đi nếu Staff đang xem để đỡ chật màn hình)
                 Tables\Columns\TextColumn::make('user.name')
-                    ->label('User')
+                    ->label(__('system.labels.user'))
                     ->alignment(Alignment::Center)
                     ->searchable()
-                    ->visible(fn() => auth()->user()?->isAdmin()),
+                    ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()),
 
                 Tables\Columns\TextColumn::make('platform')
-                    ->label('Platform')
-                    ->alignment(Alignment::Center),
+                    ->label(__('system.labels.platform'))
+                    ->alignment(Alignment::Center)
+                    ->formatStateUsing(function ($state) {
+                        return \App\Models\Platform::where('slug', $state)->value('name') 
+                            ?? ucwords(str_replace(['_', '-'], ' ', $state ?? ''));
+                    }),
 
                 Tables\Columns\TextColumn::make('transaction_type')
-                    ->label('Transaction Type')
-                    ->description(fn($record) => 'Market: ' . number_format($record->exchange_rate) . ' | Payout: ' . number_format($record->payout_rate) . ' (' . ($record->payout_percentage ?? 100) . '%)')
+                    ->label(__('system.labels.description'))
+                    ->formatStateUsing(fn($state) => str_replace(['(', ')'], ['- ', ''], $state))
+                    ->description(function ($record) {
+                        if (auth()->user()?->isAdmin() || auth()->user()?->isFinance()) {
+                            return __('system.payout_logs.fields.market_rate') . ': ' . number_format($record->exchange_rate) . ' | ' . __('system.payout_logs.fields.payout_rate') . ': ' . number_format($record->payout_rate) . ' (' . ($record->payout_percentage ?? 100) . '%)';
+                        }
+                        return __('system.labels.exchange_rate') . ': ' . number_format($record->payout_rate);
+                    })
                     ->searchable()
                     ->alignment(Alignment::Center),
 
                 Tables\Columns\TextColumn::make('total_usd')
-                    ->label('Total USD')
+                    ->label(__('system.labels.rebate_amount_usd'))
                     ->money('USD') // Tự format có chữ $
                     ->color('success')
-                    ->alignment(Alignment::Center),
+                    ->alignment(Alignment::Center)
+                    ->summarize(Tables\Columns\Summarizers\Sum::make()->label('Total')->money('USD')),
 
                 Tables\Columns\TextColumn::make('total_vnd')
-                    ->label('Total (VND)')
+                    ->label(__('system.labels.total_vnd'))
                     ->money('VND', locale: 'vi_VN') // Tự format 25.000.000 ₫
                     ->color('primary')
                     ->weight('bold')
-                    ->alignment(Alignment::Center),
+                    ->alignment(Alignment::Center)
+                    ->summarize(Tables\Columns\Summarizers\Sum::make()->label('Total')->money('VND', locale: 'vi_VN')),
 
-                // 🟢 THÊM CỘT LỢI NHUẬN (CHỈ ADMIN THẤY)
-                Tables\Columns\TextColumn::make('profit_vnd')
-                    ->label('Profit')
-                    ->money('VND', locale: 'vi_VN')
-                    ->color('success')
-                    ->visible(fn() => auth()->user()?->isAdmin())
-                    ->alignment(Alignment::Center),
 
                 Tables\Columns\TextColumn::make('status')
-                    ->label('Status')
+                    ->label(__('system.labels.status'))
                     ->alignment(Alignment::Center)
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
@@ -157,52 +175,52 @@ class UserPaymentResource extends Resource
                         default => 'gray',
                     })
                     ->formatStateUsing(fn(string $state): string => match ($state) {
-                        'pending' => 'Pending',
-                        'paid' => 'Paid',
+                        'pending' => __('system.status.pending'),
+                        'paid' => __('system.status.completed'),
                         default => $state,
                     }),
 
                 Tables\Columns\TextColumn::make('created_at')
-                    ->label('Date')
+                    ->label(__('system.labels.settlement_date'))
                     ->dateTime('d/m/Y H:i')
                     ->alignment(Alignment::Center),
             ])
             ->groups([
-                Tables\Grouping\Group::make('transaction_type')
-                    ->label('Payment Type')
+                Tables\Grouping\Group::make('asset_group')
+                    ->label(__('system.labels.revenue_split'))
                     ->getTitleFromRecordUsing(function ($record) {
-                        return str_contains($record->transaction_type, 'Gift Card') ? '🎁 Gift Card' : '💰 PayPal';
+                        return $record->asset_group === 'gift_card' ? '🎁 Gift Card' : '💰 PayPal';
                     })
             ])
-            ->defaultGroup('transaction_type')
+            ->defaultGroup('asset_group')
             ->filters([
                 // 1. Lọc theo Platform (Sàn) — CHỈ HIỆN SÀN CÓ DỮ LIỆU THỰC TẾ
                 Tables\Filters\SelectFilter::make('platform')
-                    ->label('Platform')
+                    ->label(__('system.labels.platform'))
                     ->options(fn() => UserPayment::query()->distinct()->whereNotNull('platform')->pluck('platform', 'platform'))
                     ->multiple(),
 
                 // 2. Lọc theo User (Nhân viên) — CHỈ HIỆN USER CÓ DỮ LIỆU THỰC TẾ
                 Tables\Filters\SelectFilter::make('user_id')
-                    ->label('User')
+                    ->label(__('system.labels.user'))
                     ->options(fn() => User::whereIn('id', UserPayment::query()->distinct()->pluck('user_id'))->pluck('name', 'id'))
                     ->searchable()
                     ->preload()
-                    ->visible(fn() => auth()->user()?->isAdmin()),
+                    ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()),
 
                 // 3. Lọc theo Trạng thái
                 Tables\Filters\SelectFilter::make('status')
-                    ->label('Status')
+                    ->label(__('system.labels.status'))
                     ->options([
-                        'pending' => 'Pending',
-                        'paid' => 'Paid',
+                        'pending' => __('system.status.pending'),
+                        'paid' => __('system.status.completed'),
                     ]),
 
                 // 4. Lọc TỪ NGÀY
                 Tables\Filters\Filter::make('created_from')
                     ->form([
                         Forms\Components\DatePicker::make('from')
-                            ->label('From Date'),
+                            ->label(__('system.labels.settlement_date') . ' - ' . __('system.labels.from')),
                     ])
                     ->query(fn(Builder $query, array $data): Builder => $query->when($data['from'], fn(Builder $query, $date): Builder => $query->whereDate('created_at', '>=', $date)))
                     ->indicateUsing(fn(array $data): array => ($data['from'] ?? null) ? ['From ' . \Carbon\Carbon::parse($data['from'])->format('d/m/Y')] : []),
@@ -211,21 +229,21 @@ class UserPaymentResource extends Resource
                 Tables\Filters\Filter::make('created_until')
                     ->form([
                         Forms\Components\DatePicker::make('until')
-                            ->label('To Date'),
+                            ->label(__('system.labels.settlement_date') . ' - ' . __('system.labels.until')),
                     ])
                     ->query(fn(Builder $query, array $data): Builder => $query->when($data['until'], fn(Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date)))
                     ->indicateUsing(fn(array $data): array => ($data['until'] ?? null) ? ['Until ' . \Carbon\Carbon::parse($data['until'])->format('d/m/Y')] : []),
             ])
-            ->filtersFormColumns(auth()->user()?->isAdmin() ? 5 : 4)
+            ->filtersFormColumns(auth()->user()?->isAdmin() || auth()->user()?->isFinance() ? 5 : 4)
             ->filtersLayout(FiltersLayout::AboveContent)
             ->actions([
                 Tables\Actions\EditAction::make()
-                    ->label(fn() => auth()->user()?->isAdmin() ? 'Up Bill' : 'View Bill'),
+                    ->label(fn() => (auth()->user()?->isAdmin() || auth()->user()?->isFinance()) ? __('system.user_payments.actions.up_bill') : __('system.user_payments.actions.view_bill')),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn() => auth()->user()?->isAdmin()),
+                        ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()),
                 ]),
             ]);
     }

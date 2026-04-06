@@ -955,9 +955,9 @@ textarea.fi-input {
 /* Từng hàng Holder */
 .es-holder-row {
     display: grid !important;
-    grid-template-columns: 20px 100px 1fr 1fr 1fr 1fr; /* Desktop default */
+    grid-template-columns: 24px 110px repeat(auto-fit, minmax(0, 1fr)); /* Tự động chia đều các stats còn lại */
     align-items: center !important;
-    gap: 8px !important;
+    gap: 12px !important;
     padding: 6px 0 !important;
     cursor: pointer;
     border-radius: 6px;
@@ -975,18 +975,18 @@ textarea.fi-input {
 
 /* Badge chỉ số chung */
 .es-stat-badge {
-    font-size: 10px !important;
+    font-size: 10.5px !important;
     font-weight: 700 !important;
-    padding: 2px 4px !important;
-    border-radius: 4px !important;
+    padding: 3px 8px !important;
+    border-radius: 6px !important;
     text-align: center !important;
-    width: 100% !important;
+    white-space: nowrap !important;
 }
 
 /* Avatar/Initials */
 .es-initials-circle {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border-radius: 50%;
     display: flex;

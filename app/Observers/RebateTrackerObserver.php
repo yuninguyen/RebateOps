@@ -5,7 +5,9 @@ namespace App\Observers;
 use App\Models\RebateTracker;
 use App\Jobs\SyncGoogleSheetJob;
 
-class RebateTrackerObserver
+use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
+
+class RebateTrackerObserver implements ShouldHandleEventsAfterCommit
 {
     // FIX #7: Xóa inject GoogleSheetService (không dùng, tốn khởi tạo Google API client)
     /**
