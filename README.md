@@ -18,16 +18,18 @@ RebateOps is a professional, high-performance internal tool built with **Laravel
 - **UX Excellence**: Integrated "Back to Top" functionality, optimized mobile navigation, and blur-filtered overlays.
 
 ### 🛡️ Financial Integrity & Security
+- **Smart Record Locking**: Automated locking of Payout Logs once they are generated into a Disbursement. Parents are intelligently locked only when their child transactions are fully settled.
+- **Data Integrity Safeguards**: Restricted bulk actions (Delete, Mark as Completed) for settled records to prevent accidental financial discrepancies.
 - **Pessimistic Locking**: Prevents race conditions on wallet balances using `lockForUpdate()`.
-- **Atomic Transactions**: All balance changes follow the **Red-Green-Refactor** safety pattern within DB transactions.
+- **Atomic Transactions**: All balance changes follow a strict safety pattern within DB transactions.
 - **Advanced Data Recovery**: **SoftDeletes** implemented across all core models (Accounts, Tracker, Payouts, Brands, Methods).
-- **Advanced RBAC**: Granular permission system with "Read-Only Auditor" parity for specialized financial roles.
-- **At-Rest Encryption**: Sensitive data like Gift Card codes, PINs, and account passwords are encrypted using Laravel's native encryption.
-- **Precise Calculation**: High-precision `decimal` casting for all USD/VND financial columns.
+- **At-Rest Encryption**: Sensitive data (Gift Card codes, passwords) are encrypted using Laravel's native encryption.
 
-### 🔄 Bidirectional Automation
+### 🔄 Automation & UX
+- **Composite Grouping**: Advanced table grouping in Payout Logs by **Account + Brand**, providing a clear separated view for multi-brand accounts.
+- **Contextual UI**: "Exchange to VND" link intelligently disappears once a record is fully liquidated, preventing duplicate transactions.
 - **Queue-Powered Sync**: Real-time bidirectional sync with Google Sheets (3x retry, 60s backoff).
-- **Smart Formatting**: Automatic sheet tab creation, frozen headers, and status-based conditional coloring (Live/Banned/Confirmed).
+- **Smart Formatting**: Automatic sheet tab creation, frozen headers, and status-based conditional coloring.
 - **Activity Logging**: Full audit trail for Admin oversight on every data mutation.
 
 ---
@@ -112,7 +114,8 @@ REBATEOPS
 - [x] v5.0: Advanced Financial Locking & SoftDeletes
 - [x] v5.0: Premium Mixed Mode UI Overhaul
 - [x] v5.1: Finance Role & Advanced RBAC Overhaul
-- [ ] v5.2: Automated Profit/Loss Analytics
+- [x] v5.2: Smart Payout Locking & Multi-Brand Grouping Logic
+- [ ] v5.3: Automated Profit/Loss Analytics
 - [ ] v5.3: REST API for External Automation
 - [ ] v5.4: Bulk Image Processing for Payment Proofs
 

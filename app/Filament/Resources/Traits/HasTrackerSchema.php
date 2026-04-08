@@ -44,7 +44,7 @@ trait HasTrackerSchema
                                 // 1. USER (Chỉ Admin thấy)
                                 Forms\Components\Select::make('user_id')
                                     ->label(__('system.labels.user'))
-                                    ->relationship('user', 'name')
+                                    ->relationship('user', 'name', fn (Builder $query) => $query->whereHas('accounts'))
                                     ->default(fn() => auth()->id())
                                     ->hidden(fn() => !auth()->user()?->isAdmin())
                                     ->dehydrated(true)
@@ -154,8 +154,8 @@ trait HasTrackerSchema
                                             $set('account_password_display', $account->password);
                                         }
                                     })
-                                    // 🟢 Staff: Chiếm 8/12 (Rất rộng) | Admin: Chiếm 3/12
-                                    ->columnSpan(auth()->user()?->isAdmin() ? 7 : 6),
+                                    // 🟢 Staff: Chiếm 7/12 (Rất rộng) | Admin: Chiếm 9/12
+                                    ->columnSpan(auth()->user()?->isAdmin() ? 9 : 7),
 
                                 // 4. SHOW PASSWORD (Làm nhỏ lại cho Staff)
                                 Forms\Components\TextInput::make('account_password_display')
@@ -184,7 +184,7 @@ trait HasTrackerSchema
                                             })
                                     )
                                     // 🟢 Staff: Chiếm 2/12 | Admin: Chiếm 3/12
-                                    ->columnSpan(auth()->user()?->isAdmin() ? 5 : 3),
+                                    ->columnSpan(auth()->user()?->isAdmin() ? 3 : 2),
                             ]),
 
                         // PHẦN HIỂN THỊ TRẠNG THÁI (Giữ nguyên logic của Sếp)
@@ -878,6 +878,8 @@ trait HasTrackerSchema
                             $replica->rebate_amount = (float) $data['order_value'] * ($replica->cashback_percent / 100);
                         }),
                     Tables\Actions\RestoreAction::make(), // 🟢 Nút khôi phục dòng bị xóa
+                    Tables\Actions\ForceDeleteAction::make()
+                        ->visible(fn() => auth()->user()?->isAdmin()),
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),
                 ])
@@ -919,6 +921,8 @@ trait HasTrackerSchema
                     static::makeBulkStatusAction('confirmed', __('system.actions.mark_as_confirmed') ?: 'Mark as Confirmed', 'heroicon-o-check-badge', 'success'),
 
                     Tables\Actions\RestoreBulkAction::make(),     // 🟢 Khôi phục nhiều dòng
+                    Tables\Actions\ForceDeleteBulkAction::make()
+                        ->visible(fn() => auth()->user()?->isAdmin()),
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);

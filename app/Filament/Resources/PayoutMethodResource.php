@@ -161,12 +161,7 @@ class PayoutMethodResource extends Resource
                                     ->disabled() // Để hệ thống tự cập nhật từ Payout Logs sau này
                                     ->dehydrated(false),
 
-                                TextInput::make('exchange_rate')
-                                    ->label(__('system.payout_methods.fields.liquidation_rate'))
-                                    ->numeric()
-                                    ->prefix('₫')
-                                    ->default(20000)
-                                    ->helperText(__('system.payout_methods.fields.liquidation_rate_helper')),
+
 
                                 Select::make('status')
                                     ->label(__('system.payout_methods.fields.status'))
@@ -366,7 +361,10 @@ class PayoutMethodResource extends Resource
                                         ->label(__('system.payout_methods.fields.dob'))
                                         ->dateTime('d/m/Y')
                                         ->placeholder(__('system.n/a')),
-                                    Infolists\Components\TextEntry::make('ssn')->label(__('system.payout_methods.fields.ssn_tax_id'))->copyable(),
+                                    Infolists\Components\TextEntry::make('ssn')
+                                        ->label(__('system.payout_methods.fields.ssn_tax_id'))
+                                        ->copyable()
+                                        ->placeholder(__('system.n/a')),
                                     Infolists\Components\TextEntry::make('phone')->label(__('system.payout_methods.fields.phone_number'))->copyable(),
                                     Infolists\Components\TextEntry::make('address')->label(__('system.payout_methods.fields.full_address'))->columnSpan(2),
                                 ]),
@@ -406,7 +404,7 @@ class PayoutMethodResource extends Resource
                             ->icon('heroicon-m-list-bullet')
                             ->schema([
                                 // 🟢 HEADER NHƯ MỘC CÁI BẢNG (Chỉ hiện 1 lần)
-                                Infolists\Components\Grid::make(5)
+                                Infolists\Components\Grid::make(6)
                                     ->schema([
                                         Infolists\Components\TextEntry::make('header_date')
                                             ->state(strtoupper(__('system.labels.date')))
@@ -427,6 +425,11 @@ class PayoutMethodResource extends Resource
                                             ->hiddenLabel()
                                             ->alignment(Alignment::Right)
                                             ->extraAttributes(['class' => 'text-xs font-bold text-gray-500 uppercase tracking-wider']),
+                                        Infolists\Components\TextEntry::make('header_total_vnd')
+                                            ->state(strtoupper('Net Amount (VND)'))
+                                            ->hiddenLabel()
+                                            ->alignment(Alignment::Right)
+                                            ->extraAttributes(['class' => 'text-xs font-bold text-gray-500 uppercase tracking-wider']),
                                     ])
                                     ->columnSpanFull()
                                     ->extraAttributes(['class' => 'border-b border-gray-100 pb-2 mb-2']),
@@ -434,15 +437,15 @@ class PayoutMethodResource extends Resource
                                 Infolists\Components\RepeatableEntry::make('latestPayoutLogs')
                                     ->label('') // Bỏ nhãn cho gọn trong Tab
                                     ->schema([
-                                        Infolists\Components\Grid::make(5)->schema([
-                                            // 1. NGÀY (1/5)
+                                        Infolists\Components\Grid::make(6)->schema([
+                                            // 1. NGÀY (1/6)
                                             Infolists\Components\TextEntry::make('created_at')
                                                 ->hiddenLabel()
                                                 ->dateTime('d/m/Y H:i')
                                                 ->size(Infolists\Components\TextEntry\TextEntrySize::Small)
                                                 ->color('gray'),
 
-                                            // 2. CHI TIẾT (2/5)
+                                            // 2. CHI TIẾT (2/6)
                                             Infolists\Components\TextEntry::make('transaction_type')
                                                 ->hiddenLabel()
                                                 ->columnSpan(2)
@@ -480,7 +483,7 @@ class PayoutMethodResource extends Resource
                                                     return "<div class='text-sm'><span class='font-bold {$colorClass}'>[" . strtoupper($typeLabel) . "]</span> <span class='text-gray-600 ml-1'>{$description}</span></div>";
                                                 }),
 
-                                            // 3. TỶ GIÁ (1/5 - Căn giữa)
+                                            // 3. TỶ GIÁ (1/6 - Căn giữa)
                                             Infolists\Components\TextEntry::make('exchange_rate')
                                                 ->hiddenLabel()
                                                 ->alignment(Alignment::Center)
@@ -494,7 +497,7 @@ class PayoutMethodResource extends Resource
                                                 })
                                                 ->color(fn(\App\Models\PayoutLog $record) => $record->transaction_type === 'liquidation' ? 'success' : 'gray'),
 
-                                            // 4. SỐ TIỀN THỰC NHẬN (1/5 - Căn phải)
+                                            // 4. SỐ TIỀN THỰC NHẬN USD (1/6 - Căn phải)
                                             Infolists\Components\TextEntry::make('net_amount_usd')
                                                 ->hiddenLabel()
                                                 ->alignment(Alignment::Right)
@@ -502,6 +505,19 @@ class PayoutMethodResource extends Resource
                                                 ->weight(FontWeight::Bold)
                                                 // 🟢 Xanh cho tiền vào (Withdrawal), Cam cho tiền ra (Liquidation)
                                                 ->color(fn(\App\Models\PayoutLog $record) => $record->transaction_type === 'withdrawal' ? 'success' : 'warning'),
+
+                                            // 5. SỐ TIỀN THỰC NHẬN VNĐ (1/6 - Căn phải)
+                                            Infolists\Components\TextEntry::make('total_vnd')
+                                                ->hiddenLabel()
+                                                ->alignment(Alignment::Right)
+                                                ->formatStateUsing(function ($state, \App\Models\PayoutLog $record) {
+                                                    if ($record->transaction_type === 'withdrawal') {
+                                                        return null;
+                                                    }
+                                                    return $state ? '₫' . number_format((float) $state, 0, ',', '.') : '-';
+                                                })
+                                                ->color('success')
+                                                ->weight(FontWeight::Bold),
                                         ]),
                                     ])
                                     ->columnSpanFull()
@@ -545,6 +561,7 @@ class PayoutMethodResource extends Resource
                     ->wrap()
                     ->width('502px')
                     ->copyableState(function ($record) {
+                        $na = __('system.n/a');
                         $labels = [
                             'email' => __('system.labels.email_address'),
                             'pass' => __('system.labels.password'),
@@ -565,25 +582,27 @@ class PayoutMethodResource extends Resource
                             'device' => __('system.payout_methods.fields.device'),
                         ];
 
+                        $val = fn($v) => $v ?: $na;
+
                         return
                             "<===== ACCOUNT =====>\n" .
-                            "{$labels['email']}: {$record->email} | {$labels['pass']}: {$record->password}\n" .
-                            "{$labels['paypal']}: {$record->paypal_account} | {$labels['paypal_pass']}: {$record->paypal_password}\n" .
-                            "{$labels['auth']}: {$record->auth_code}\n" .
+                            "{$labels['email']}: " . $val($record->email) . " | {$labels['pass']}: " . $val($record->password) . "\n" .
+                            "{$labels['paypal']}: " . $val($record->paypal_account) . " | {$labels['paypal_pass']}: " . $val($record->paypal_password) . "\n" .
+                            "{$labels['auth']}: " . $val($record->auth_code) . "\n" .
                             "{$labels['status']}: " . (__('system.status.' . $record->status) ?: $record->status) . "\n" .
-                            "{$labels['note']}: {$record->note}\n" .
+                            "{$labels['note']}: " . $val($record->note) . "\n" .
                             "<===== PERSONAL INFORMATION =====>\n" .
-                            "{$labels['name']}: {$record->full_name}\n" .
-                            "{$labels['dob']}: {$record->dob}\n" .
-                            "{$labels['ssn']}: {$record->ssn}\n" .
-                            "{$labels['phone']}: {$record->phone}\n" .
-                            "{$labels['address']}: {$record->address}\n" .
+                            "{$labels['name']}: " . $val($record->full_name) . "\n" .
+                            "{$labels['dob']}: " . ($record->dob ? \Carbon\Carbon::parse($record->dob)->format('d/m/Y') : $na) . "\n" .
+                            "{$labels['ssn']}: " . $val($record->ssn) . "\n" .
+                            "{$labels['phone']}: " . $val($record->phone) . "\n" .
+                            "{$labels['address']}: " . $val($record->address) . "\n" .
                             "<===== SECURITY QUESTIONS =====>\n" .
-                            "Q1: {$record->question_1} -> {$record->answer_1}\n" .
-                            "Q2: {$record->question_2} -> {$record->answer_2}\n" .
+                            "Q1: " . $val($record->question_1) . " -> " . $val($record->answer_1) . "\n" .
+                            "Q2: " . $val($record->question_2) . " -> " . $val($record->answer_2) . "\n" .
                             "<===== CONNECTION & DEVICE =====>\n" .
-                            "{$labels['ip']}: {$record->ip_address} | {$labels['location']}: {$record->location} | {$labels['isp']}: {$record->isp} | \n" .
-                            "{$labels['browser']}: {$record->browser} | {$labels['device']}: {$record->device}\n";
+                            "{$labels['ip']}: " . $val($record->ip_address) . " | {$labels['location']}: " . $val($record->location) . " | {$labels['isp']}: " . $val($record->isp) . "\n" .
+                            "{$labels['browser']}: " . $val($record->browser) . " | {$labels['device']}: " . $val($record->device) . "\n";
                     })
                     ->state(function ($record) {
                         // Xác định màu cho Status
@@ -603,14 +622,15 @@ class PayoutMethodResource extends Resource
                             default => ucwords($record->status),
                         };
 
-                        $payPalAccount = $record->paypal_account;
-                        $paypalPassword = $record->paypal_password;
-                        $authcode = $record->auth_code;
-                        $fullName = $record->full_name;
-                        $dob = $record->dob;
-                        $ssn = $record->ssn;
-                        $phone = $record->phone;
-                        $address = $record->address;
+                        $na = __('system.n/a');
+                        $payPalAccount = $record->paypal_account ?: $na;
+                        $paypalPassword = $record->paypal_password ?: $na;
+                        $authcode = $record->auth_code ?: $na;
+                        $fullName = $record->full_name ?: $na;
+                        $dob = $record->dob ? \Carbon\Carbon::parse($record->dob)->format('d/m/Y') : $na;
+                        $ssn = $record->ssn ?: $na;
+                        $phone = $record->phone ?: $na;
+                        $address = $record->address ?: $na;
 
                         $labels = [
                             'paypal' => __('system.payout_methods.fields.paypal_account'),

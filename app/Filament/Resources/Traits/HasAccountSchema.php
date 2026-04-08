@@ -773,6 +773,8 @@ trait HasAccountSchema
                         ->successNotificationTitle(__('system.notifications.added_successfully')),
 
                     Tables\Actions\RestoreAction::make(),
+                    Tables\Actions\ForceDeleteAction::make()
+                        ->visible(fn() => auth()->user()?->isAdmin()),
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),
 
@@ -937,6 +939,8 @@ trait HasAccountSchema
                         })
                         ->deselectRecordsAfterCompletion(),
                     Tables\Actions\RestoreBulkAction::make()
+                        ->visible(fn() => auth()->user()?->isAdmin()),
+                    Tables\Actions\ForceDeleteBulkAction::make()
                         ->visible(fn() => auth()->user()?->isAdmin()),
                     Tables\Actions\DeleteBulkAction::make()
                         ->visible(fn() => auth()->user()?->isAdmin()),
