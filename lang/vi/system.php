@@ -384,6 +384,7 @@ return [
             'total_confirmed' => 'Tổng Cashback đã xác nhận',
             'total_paid_usd' => 'Tổng đã thanh toán (USD)',
             'total_exchanged_vnd' => 'Tổng quy đổi (VND)',
+            'net_amount_usd' => 'Thực nhận (USD)',
             'filtered' => ' (Đã lọc)',
         ],
         'asset_types' => [

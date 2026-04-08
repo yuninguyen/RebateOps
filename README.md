@@ -14,7 +14,8 @@ RebateOps is a professional, high-performance internal tool built with **Laravel
 ### 💎 Premium Design System
 - **Mixed Mode UI**: Dark elegant sidebar paired with clean, information-dense light content area.
 - **Modern Typography**: Powered by **Plus Jakarta Sans** for that premium "Google Sans" feel.
-- **Pixel-Perfect Dashboards**: Custom-built responsive widgets with equal-height grid layouts and micro-animations.
+- **High-Density UX**: Optimized 90% scaling for tables, robust text-wrapping, and zero horizontal scroll on data-heavy resources.
+- **Native Multi-Language**: Seamless toggle between **English** and **Vietnamese** with consistent label mapping.
 - **UX Excellence**: Integrated "Back to Top" functionality, optimized mobile navigation, and blur-filtered overlays.
 
 ### 🛡️ Financial Integrity & Security
@@ -22,7 +23,7 @@ RebateOps is a professional, high-performance internal tool built with **Laravel
 - **Data Integrity Safeguards**: Restricted bulk actions (Delete, Mark as Completed) for settled records to prevent accidental financial discrepancies.
 - **Pessimistic Locking**: Prevents race conditions on wallet balances using `lockForUpdate()`.
 - **Atomic Transactions**: All balance changes follow a strict safety pattern within DB transactions.
-- **Advanced Data Recovery**: **SoftDeletes** implemented across all core models (Accounts, Tracker, Payouts, Brands, Methods).
+- **Advanced Data Recovery**: **SoftDeletes** implemented across all core models, with "Restore" and "Force Delete" capabilities for authorized Admins.
 - **At-Rest Encryption**: Sensitive data (Gift Card codes, passwords) are encrypted using Laravel's native encryption.
 
 ### 🔄 Automation & UX
@@ -30,6 +31,7 @@ RebateOps is a professional, high-performance internal tool built with **Laravel
 - **Contextual UI**: "Exchange to VND" link intelligently disappears once a record is fully liquidated, preventing duplicate transactions.
 - **Queue-Powered Sync**: Real-time bidirectional sync with Google Sheets (3x retry, 60s backoff).
 - **Smart Formatting**: Automatic sheet tab creation, frozen headers, and status-based conditional coloring.
+- **Language-Independent Nav**: Strict sidebar hierarchy (Dashboard → Resource → Work → Wallet → Settings → Logs) enforced regardless of active locale.
 - **Activity Logging**: Full audit trail for Admin oversight on every data mutation.
 
 ---
@@ -112,12 +114,13 @@ REBATEOPS
 
 ## 👨‍💻 Roadmap
 - [x] v5.0: Advanced Financial Locking & SoftDeletes
-- [x] v5.0: Premium Mixed Mode UI Overhaul
 - [x] v5.1: Finance Role & Advanced RBAC Overhaul
 - [x] v5.2: Smart Payout Locking & Multi-Brand Grouping Logic
-- [ ] v5.3: Automated Profit/Loss Analytics
-- [ ] v5.3: REST API for External Automation
-- [ ] v5.4: Bulk Image Processing for Payment Proofs
+- [x] v5.3: Core Localization (VI/EN) & UI Density Optimization
+- [x] v5.4: Advanced Data Recovery (Restore / Force Delete)
+- [ ] v5.5: Automated Profit/Loss Analytics
+- [ ] v5.6: Bulk Image Processing for Payment Proofs
+- [ ] v5.7: REST API for External Automation
 
 ---
 <p align="center">Built for Excellence. Optimized for Profit.</p>

@@ -44,9 +44,9 @@ class AdminUserEarningsTable extends BaseWidget
         // 1. Query cho Operator: Gộp theo Nhóm tài sản (Gift Card vs PayPal)
         $operatorQuery = UserPayment::query()
             ->join('users', 'user_payments.user_id', '=', 'users.id')
-            ->where('users.role', 'operator')
+            ->whereIn('users.role', ['admin', 'staff', 'operator'])
             ->select('user_payments.user_id as user_id', 'users.role as user_role', 'users.name as user_name', 'user_payments.asset_group as asset_group')
-            ->selectRaw('SUM(CASE WHEN status = "pending" THEN total_vnd ELSE 0 END) as amount_pending')
+            ->selectRaw('SUM(total_usd) as amount_usd')
             ->selectRaw('SUM(CASE WHEN status = "paid" THEN total_vnd ELSE 0 END) as amount_paid')
             ->groupBy('user_id', 'asset_group', 'user_role')
             // Scope cho Operator: Chỉ thấy của chính mình
@@ -60,13 +60,26 @@ class AdminUserEarningsTable extends BaseWidget
             ->where('role', 'finance')
             ->select('users.id as user_id', 'users.role as user_role', 'users.name as user_name')
             ->selectRaw("'system_profit' as asset_group")
-            ->selectRaw('0 as amount_pending')
             ->selectRaw('
-                (SELECT SUM((exchange_rate - payout_rate) * total_usd * (payout_percentage / 100)) 
+                (SELECT SUM(total_usd) 
                  FROM user_payments 
                  WHERE status = "paid"
+                 AND deleted_at IS NULL
                  AND (? IS NULL OR created_at >= ?)
                  AND (? IS NULL OR created_at <= ?)
+                ) as amount_usd
+            ', [
+                $data['from_date'] ?? null,
+                $data['from_date'] ?? null,
+                $data['to_date'] ?? null,
+                $data['to_date'] ?? null
+            ])
+            ->selectRaw('
+                (SELECT SUM((exchange_rate - payout_rate) * total_usd * (payout_percentage / 100)) 
+                 FROM user_payments                  WHERE status = "paid"
+                  AND deleted_at IS NULL
+                  AND (? IS NULL OR created_at >= ?)
+                  AND (? IS NULL OR created_at <= ?)
                 ) as amount_paid
             ', [
                 $data['from_date'] ?? null,
@@ -111,18 +124,18 @@ class AdminUserEarningsTable extends BaseWidget
                         default => 'gray',
                     })
                     ->visibleFrom('md'),
-
-                Tables\Columns\TextColumn::make('amount_pending')
-                    ->label(__('system.status.pending') . ' (VND)')
-                    ->money('VND', locale: 'vi_VN')
-                    ->color('warning')
+                
+                Tables\Columns\TextColumn::make('amount_usd')
+                    ->label(__('system.payout_logs.fields.net_amount_usd'))
+                    ->money('USD')
+                    ->color('info')
                     ->alignment(Alignment::Center)
                     ->summarize(
                         Tables\Columns\Summarizers\Sum::make()
                             ->label('')
-                            ->money('VND', locale: 'vi_VN')
+                            ->money('USD')
                     ),
-
+                
                 Tables\Columns\TextColumn::make('amount_paid')
                     ->label(__('system.status.completed') . ' (VND)')
                     ->money('VND', locale: 'vi_VN')
@@ -149,7 +162,7 @@ class AdminUserEarningsTable extends BaseWidget
                     ->form([
                         Select::make('user_id')
                             ->label(__('system.labels.user'))
-                            ->options(User::whereIn('role', ['operator', 'finance'])->pluck('name', 'id'))
+                            ->options(User::whereIn('role', ['admin', 'staff', 'operator', 'finance'])->pluck('name', 'id'))
                             ->searchable()
                             ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance())
                             ->live(),

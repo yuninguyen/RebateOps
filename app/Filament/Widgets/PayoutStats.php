@@ -37,31 +37,35 @@ class PayoutStats extends BaseWidget
         // Đây là nguồn dữ liệu chính xác nhất cho doanh thu đã xác nhận từ platform
         $rebateQuery = \App\Models\RebateTracker::query();
 
-        // 2. Khởi tạo Query cho UserPayment (Dành cho Card 2 & 3 - Paid/Exchanged)
-        // Đây là nguồn dữ liệu cho các khoản đã thực sự chi trả cho User
-        $disbursementQuery = \App\Models\UserPayment::query();
+        // 2. Khởi tạo Query cho PayoutLog (Dành cho Card 2 & 3 - Paid/Exchanged)
+        // Đây là nguồn dữ liệu phản ánh chính xác các giao dịch thực tế trong hệ thống
+        $payoutQuery = \App\Models\PayoutLog::query();
 
-        // 3. Áp dụng logic lọc theo User cho cả hai Query
+        // 3. Áp dụng logic lọc theo User cho các Query
         if (!auth()->user()?->isAdmin()) {
             // Nếu là Staff, chỉ xem của chính mình
             $rebateQuery->where('user_id', auth()->id());
-            $disbursementQuery->where('user_id', auth()->id());
+            $payoutQuery->where('user_id', auth()->id());
         } elseif ($this->selectedUserId) {
             // Nếu là Admin và đang chọn 1 User cụ thể
             $rebateQuery->where('user_id', $this->selectedUserId);
-            $disbursementQuery->where('user_id', $this->selectedUserId);
+            $payoutQuery->where('user_id', $this->selectedUserId);
         }
 
         // --- TÍNH TOÁN CARD 1: CONFIRMED (Từ RebateTracker) ---
-        // Đồng bộ 100% với bảng Revenue Report bên dưới
         $totalConfirmedUsd = (clone $rebateQuery)->where('status', 'Confirmed')
             ->sum('rebate_amount');
 
-        // --- TÍNH TOÁN CARD 2 & 3: PAID / EXCHANGED (Từ UserPayment/Disbursement) ---
-        $totalPaidUsd = (clone $disbursementQuery)->where('status', 'paid')
-            ->sum('total_usd');
+        // --- TÍNH TOÁN CARD 2: PAID USD (Tổng tiền thực nhận từ Withdrawal và Hold) ---
+        $totalPaidUsd = (clone $payoutQuery)
+            ->whereIn('transaction_type', ['withdrawal', 'hold'])
+            ->where('status', 'completed')
+            ->sum('net_amount_usd');
 
-        $totalVnd = (clone $disbursementQuery)->where('status', 'paid')
+        // --- TÍNH TOÁN CARD 3: EXCHANGED VND (Tổng tiền đã đổi từ Liquidation) ---
+        $totalVnd = (clone $payoutQuery)
+            ->where('transaction_type', 'liquidation')
+            ->where('status', 'completed')
             ->sum('total_vnd');
 
         // Hiển thị nhãn để biết đang lọc hay xem tổng

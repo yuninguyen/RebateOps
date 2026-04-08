@@ -941,7 +941,7 @@ class PayoutLogResource extends Resource
                     ->label(__('system.labels.total_vnd'))
                     ->placeholder('')
                     ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()) // 🟢 HIỆN CHO ADMIN & FINANCE
-                    ->formatStateUsing(fn ($record, $state) => $record->transaction_type === 'liquidation' ? '₫' . number_format($state, 0, ',', '.') : '')
+                    ->formatStateUsing(fn($record, $state) => $record->transaction_type === 'liquidation' ? '₫' . number_format($state, 0, ',', '.') : '')
                     ->alignment(Alignment::Center)
                     // 🟢 TỔNG KẾT VND
                     ->summarize(
@@ -1362,7 +1362,12 @@ class PayoutLogResource extends Resource
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\RestoreAction::make(), // 🟢 Nút khôi phục dòng bị xóa
                     Tables\Actions\ForceDeleteAction::make()
-                        ->visible(fn() => auth()->user()?->isAdmin()), // 🟢 Chỉ Admin mới được xóa vĩnh viễn
+                        ->visible(fn() => auth()->user()?->isAdmin())
+                        ->hidden(function ($record) {
+                            $settledSum = floatval($record->settled_children_sum ?? 0);
+                            $netAmount = floatval($record->net_amount_usd ?? 0);
+                            return $record->user_payment_id !== null || ($settledSum >= $netAmount && $record->children_count > 0);
+                        }), // 🛑 KHÓA KHI ĐÃ CHỐT SỔ 100%
                     Tables\Actions\EditAction::make()
                         ->hidden(function ($record) {
                             $settledSum = floatval($record->settled_children_sum ?? 0);
@@ -1576,10 +1581,31 @@ class PayoutLogResource extends Resource
 
                     Tables\Actions\RestoreBulkAction::make(),     // 🟢 Khôi phục nhiều dòng
                     Tables\Actions\ForceDeleteBulkAction::make()
-                        ->visible(fn() => auth()->user()?->isAdmin()), // 🟢 Chỉ Admin mới được xóa vĩnh viễn
+                        ->visible(fn() => auth()->user()?->isAdmin())
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            $unlockedRecords = $records->filter(function ($record) {
+                                $settledSum = floatval($record->settled_children_sum ?? 0);
+                                $netAmount = floatval($record->net_amount_usd ?? 0);
+                                return $record->user_payment_id === null && !($settledSum >= $netAmount && $record->children_count > 0);
+                            });
+                            $lockedCount = $records->count() - $unlockedRecords->count();
+
+                            if ($lockedCount > 0) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title("Cannot force-delete $lockedCount settled records.")
+                                    ->warning()
+                                    ->send();
+                            }
+
+                            $unlockedRecords->each->forceDelete();
+                        }),
                     Tables\Actions\DeleteBulkAction::make()
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
-                            $unlockedRecords = $records->filter(fn($record) => $record->user_payment_id === null);
+                            $unlockedRecords = $records->filter(function ($record) {
+                                $settledSum = floatval($record->settled_children_sum ?? 0);
+                                $netAmount = floatval($record->net_amount_usd ?? 0);
+                                return $record->user_payment_id === null && !($settledSum >= $netAmount && $record->children_count > 0);
+                            });
                             $lockedCount = $records->count() - $unlockedRecords->count();
 
                             if ($lockedCount > 0) {
@@ -1594,17 +1620,11 @@ class PayoutLogResource extends Resource
                 ]),
             ])
             ->groups([
-                // 🟢 GROUPING THEO ACCOUNT + BRAND + ĐỢT RÚT (Sử dụng Composite Key)
                 Tables\Grouping\Group::make('group_key')
-                    ->label(__('system.labels.account') . ' & ' . __('system.labels.brand'))
+                    ->label(__('system.labels.account'))
                     ->collapsible()
                     ->getTitleFromRecordUsing(function ($record) {
-                        $email = $record->account?->email?->email ?? __('system.n/a');
-                        $brand = $record->gc_brand ? ucwords(str_replace(['_', '-'], ' ', $record->gc_brand)) : null;
-                        $withdrawalId = $record->parent_id ?? $record->id;
-
-                        $title = $brand ? "$email | Brand: $brand" : $email;
-                        return $title . " (Withdrawal ID: #$withdrawalId)";
+                        return $record->account?->email?->email ?? __('system.n/a');
                     })
                     ->getKeyFromRecordUsing(fn($record) => $record->group_key)
                     ->scopeQueryByKeyUsing(function (Builder $query, $key) {
@@ -1620,10 +1640,10 @@ class PayoutLogResource extends Resource
                                 fn($sub) => $sub->where('payout_logs.gc_brand', $brand),
                                 fn($sub) => $sub->whereNull('payout_logs.gc_brand')
                             )
-                            ->where(function($q) use ($withdrawalId) {
+                            ->where(function ($q) use ($withdrawalId) {
                                 // 🟢 LỌC CHÍNH XÁC: Đơn cha HOẶC các đơn con của nó
                                 $q->where('payout_logs.id', $withdrawalId)
-                                  ->orWhere('payout_logs.parent_id', $withdrawalId);
+                                    ->orWhere('payout_logs.parent_id', $withdrawalId);
                             });
                     }),
             ])

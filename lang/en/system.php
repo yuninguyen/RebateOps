@@ -378,6 +378,7 @@ return [
             'total_confirmed' => 'Total Confirmed Cashback',
             'total_paid_usd' => 'Total Paid (USD)',
             'total_exchanged_vnd' => 'Total Exchanged (VND)',
+            'net_amount_usd' => 'Net Amount (USD)',
             'filtered' => ' (Filtered)',
         ],
         'asset_types' => [
