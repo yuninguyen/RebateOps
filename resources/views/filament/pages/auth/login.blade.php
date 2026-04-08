@@ -41,14 +41,18 @@
             50% { transform: translate(-30px, 20px) scale(1.05); }
         }
 
-        /* Login card styling */
+        /* Login card styling — Ensure intermediate containers are transparent */
         .fi-simple-main {
             position: relative;
             z-index: 1;
+            background: transparent !important;
         }
 
         .fi-simple-main-ctn {
-            max-width: 420px !important;
+            max-width: 480px !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            border: none !important;
         }
 
         .fi-simple-page {

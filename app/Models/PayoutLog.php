@@ -20,6 +20,19 @@ class PayoutLog extends Model
      * CỜ ĐỒNG BỘ: Ngăn chặn vòng lặp vô tận khi đồng bộ từ Google Sheets
      */
     protected bool $is_syncing_from_sheet = false;
+
+    protected static function booted()
+    {
+        static::deleting(function ($log) {
+            // 🟢 TỰ ĐỘNG XÓA CON: Khi xóa đơn cha (Withdrawal), các dòng con (Liquidation) sẽ bị xóa theo
+            $log->children()->delete();
+        });
+
+        static::restoring(function ($log) {
+            // 🟢 TỰ ĐỘNG KHÔI PHỤC: Khi khôi phục đơn cha, các dòng con cũng quay lại
+            $log->children()->withTrashed()->restore();
+        });
+    }
     protected $fillable = [
         // --- Các trường định danh ---
         'user_id',              // 🟢 MỚI: Người thực hiện giao dịch

@@ -70,4 +70,9 @@ class PayoutMethod extends Model
     {
         return $this->hasMany(PayoutLog::class);
     }
+
+    public function latestPayoutLogs(): HasMany
+    {
+        return $this->hasMany(PayoutLog::class)->whereNull('deleted_at')->latest()->limit(20);
+    }
 }

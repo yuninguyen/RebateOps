@@ -17,7 +17,7 @@ class UserPayment extends Model
     protected static function booted()
     {
         static::deleting(function ($payment) {
-            // 🟢 TỰ ĐỘNG GIẢI PHÓNG: Khi xóa phiếu lương, các đơn rút tiền con sẽ quay về "Chưa chốt sổ" (Pending)
+            // 🟢 TỰ ĐỘNG GIẢI PHÓNG: Khi xóa giao dịch quyết toán, các đơn rút tiền con được trả về trạng thái tự do để chốt sổ lại
             $payment->payoutLogs()->update(['user_payment_id' => null]);
         });
     }

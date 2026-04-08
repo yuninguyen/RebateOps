@@ -311,10 +311,6 @@ class PayoutMethodResource extends Resource
                                 ->label(__('system.payout_methods.fields.current_balance'))
                                 ->money('USD')
                                 ->color('warning'),
-                            Infolists\Components\TextEntry::make('exchange_rate')
-                                ->label(__('system.payout_methods.fields.liquidation_rate'))
-                                ->money('VND')
-                                ->color('success'),
                             Infolists\Components\TextEntry::make('status')
                                 ->label(__('system.payout_methods.fields.status'))
                                 ->badge()
@@ -325,7 +321,7 @@ class PayoutMethodResource extends Resource
                                     'restored' => 'info',
                                     default => 'gray',
                                 })
-                                ->formatStateUsing(function($state) {
+                                ->formatStateUsing(function ($state) {
                                     $label = match ($state) {
                                         'active' => __('system.status.active'),
                                         'limited' => __('system.status.paypal_limited'),
@@ -403,6 +399,113 @@ class PayoutMethodResource extends Resource
                                         "<div style='white-space: pre-wrap; line-height: 1.6; margin: 0; padding: 0;'>" . e(trim($state)) . "</div>"
                                         : __('system.n/a')),
 
+                            ]),
+
+                        // TAB 4: LỊCH SỬ GIAO DỊCH (Mini statement)
+                        Infolists\Components\Tabs\Tab::make(__('system.labels.transaction_activity'))
+                            ->icon('heroicon-m-list-bullet')
+                            ->schema([
+                                // 🟢 HEADER NHƯ MỘC CÁI BẢNG (Chỉ hiện 1 lần)
+                                Infolists\Components\Grid::make(5)
+                                    ->schema([
+                                        Infolists\Components\TextEntry::make('header_date')
+                                            ->state(strtoupper(__('system.labels.date')))
+                                            ->hiddenLabel()
+                                            ->extraAttributes(['class' => 'text-xs font-bold text-gray-500 uppercase tracking-wider']),
+                                        Infolists\Components\TextEntry::make('header_details')
+                                            ->state(strtoupper(__('system.labels.transaction_details')))
+                                            ->hiddenLabel()
+                                            ->columnSpan(2)
+                                            ->extraAttributes(['class' => 'text-xs font-bold text-gray-500 uppercase tracking-wider']),
+                                        Infolists\Components\TextEntry::make('header_rate')
+                                            ->state(strtoupper(__('system.brands.columns.rate')))
+                                            ->hiddenLabel()
+                                            ->alignment(Alignment::Center)
+                                            ->extraAttributes(['class' => 'text-xs font-bold text-gray-500 uppercase tracking-wider pl-12']),
+                                        Infolists\Components\TextEntry::make('header_amount')
+                                            ->state(strtoupper(__('system.labels.net_amount_usd')))
+                                            ->hiddenLabel()
+                                            ->alignment(Alignment::Right)
+                                            ->extraAttributes(['class' => 'text-xs font-bold text-gray-500 uppercase tracking-wider']),
+                                    ])
+                                    ->columnSpanFull()
+                                    ->extraAttributes(['class' => 'border-b border-gray-100 pb-2 mb-2']),
+
+                                Infolists\Components\RepeatableEntry::make('latestPayoutLogs')
+                                    ->label('') // Bỏ nhãn cho gọn trong Tab
+                                    ->schema([
+                                        Infolists\Components\Grid::make(5)->schema([
+                                            // 1. NGÀY (1/5)
+                                            Infolists\Components\TextEntry::make('created_at')
+                                                ->hiddenLabel()
+                                                ->dateTime('d/m/Y H:i')
+                                                ->size(Infolists\Components\TextEntry\TextEntrySize::Small)
+                                                ->color('gray'),
+
+                                            // 2. CHI TIẾT (2/5)
+                                            Infolists\Components\TextEntry::make('transaction_type')
+                                                ->hiddenLabel()
+                                                ->columnSpan(2)
+                                                ->html()
+                                                ->formatStateUsing(function ($state, $record) {
+                                                    $description = '';
+                                                    $typeLabel = '';
+
+                                                    if ($state === 'withdrawal') {
+                                                        $typeLabel = __('system.payout_logs.transaction_types.withdrawal');
+                                                        $platformName = \App\Models\Platform::where('slug', $record->account?->platform)->value('name') ?? ucwords($record->account?->platform ?? __('system.n/a'));
+                                                        $accountEmail = $record->account?->email?->email ?? __('system.no_email');
+                                                        $description = "{$platformName} - {$accountEmail} - ID #{$record->id}";
+                                                    } else {
+                                                        $typeLabel = __('system.payout_logs.transaction_types.liquidation');
+                                                        $description = $record->note ?? '';
+
+                                                        // 🚀 Smart Extraction: Nếu note bắt đầu bằng [TAG], bóc nó ra làm nhãn chính
+                                                        if (preg_match('/^\[(.*?)\]/', $description, $matches)) {
+                                                            $typeLabel = $matches[1]; // Lấy nội dung trong ngoặc: SEND, PAYMENT_SERVICE, ...
+                                                            $description = trim(str_replace($matches[0], '', $description));
+                                                        }
+
+                                                        if (str_contains($description, 'Liquidity from ID')) {
+                                                            $description = str_replace('Liquidity from ID', __('system.labels.liquidity_from_id'), $description);
+                                                        }
+                                                        if (str_contains($description, 'Liquidation from ID')) {
+                                                            $description = str_replace('Liquidation from ID', __('system.labels.liquidity_from_id'), $description);
+                                                        }
+                                                    }
+
+                                                    // 🟢 Green for Inflow (Withdrawal), Orange for Outflow (Liquidation)
+                                                    $colorClass = $state === 'withdrawal' ? 'text-success-600' : 'text-orange-600';
+
+                                                    return "<div class='text-sm'><span class='font-bold {$colorClass}'>[" . strtoupper($typeLabel) . "]</span> <span class='text-gray-600 ml-1'>{$description}</span></div>";
+                                                }),
+
+                                            // 3. TỶ GIÁ (1/5 - Căn giữa)
+                                            Infolists\Components\TextEntry::make('exchange_rate')
+                                                ->hiddenLabel()
+                                                ->alignment(Alignment::Center)
+                                                ->extraAttributes(['class' => 'pr-6'])
+                                                // 🟢 Bỏ trống RATE nếu là rút tiền về ví (Withdrawal), Format VNĐ cho Liquidation
+                                                ->formatStateUsing(function ($state, \App\Models\PayoutLog $record) {
+                                                    if ($record->transaction_type === 'withdrawal') {
+                                                        return null; // Trả về null sẽ tự động bỏ trống hoặc dùng placeholder
+                                                    }
+                                                    return $state ? '₫' . number_format((float) $state, 0, ',', '.') : '-';
+                                                })
+                                                ->color(fn(\App\Models\PayoutLog $record) => $record->transaction_type === 'liquidation' ? 'success' : 'gray'),
+
+                                            // 4. SỐ TIỀN THỰC NHẬN (1/5 - Căn phải)
+                                            Infolists\Components\TextEntry::make('net_amount_usd')
+                                                ->hiddenLabel()
+                                                ->alignment(Alignment::Right)
+                                                ->money('USD')
+                                                ->weight(FontWeight::Bold)
+                                                // 🟢 Xanh cho tiền vào (Withdrawal), Cam cho tiền ra (Liquidation)
+                                                ->color(fn(\App\Models\PayoutLog $record) => $record->transaction_type === 'withdrawal' ? 'success' : 'warning'),
+                                        ]),
+                                    ])
+                                    ->columnSpanFull()
+                                    ->extraAttributes(['class' => 'divide-y divide-gray-50']),
                             ]),
                     ])
                     ->columnSpanFull(),
@@ -581,12 +684,6 @@ class PayoutMethodResource extends Resource
                     ->color('warning')
                     ->weight('bold'),
 
-                Tables\Columns\TextColumn::make('exchange_rate')
-                    ->label(__('system.brands.columns.rate'))
-                    ->money('VND')
-                    ->alignment(Alignment::Center)
-                    ->color('success')
-                    ->weight('bold'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('type')

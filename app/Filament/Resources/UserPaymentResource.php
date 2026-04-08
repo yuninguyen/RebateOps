@@ -57,21 +57,20 @@ class UserPaymentResource extends Resource
     // 🟢 1. PHÂN QUYỀN DỮ LIỆU: Staff chỉ thấy lương của mình
     public static function getEloquentQuery(): Builder
     {
-        // 🟢 LUÔN LẤY CHI TIẾT: Không dùng GROUP BY trong SQL nữa để bảo toàn từng dòng lẻ của Sếp
+        // 🟢 FIX TRẬN ĐÁNH ID: Explicitly select user_payments.* để tránh bị bảng Users ghi đè ID
         $query = parent::getEloquentQuery()
             ->with(['payoutLogs.account.email'])
             ->leftJoin('users', 'user_payments.user_id', '=', 'users.id')
-            ->select([
-                'user_payments.*',
-                \Illuminate\Support\Facades\DB::raw("COALESCE(user_payments.batch_id, 'no_batch') as batch_label"),
-                \Illuminate\Support\Facades\DB::raw("CONCAT(users.name, ' | Batch: ', COALESCE(user_payments.batch_id, 'N/A')) as user_batch_label"),
-            ])
+            ->select('user_payments.*')
+            // 🟢 FIX SQL ALIAS: Dùng selectRaw để chỉ định rõ tên cột cho Grouping/Ordering hoạt động được
+            ->selectRaw("CONCAT(COALESCE(users.name, 'Unknown User'), ' | Batch: ', COALESCE(user_payments.batch_id, 'N/A')) as user_batch_label")
+            ->selectRaw("COALESCE(user_payments.batch_id, 'no_batch') as batch_label")
             ->reorder()
-            ->orderByRaw('status = "pending" DESC')
+            ->orderByRaw('user_payments.status = "pending" DESC')
             ->orderBy('user_payments.batch_id', 'desc')
             ->orderBy('user_payments.created_at', 'desc');
 
-        // Nếu không phải Admin và không phải Finance, ép query chỉ tìm user_id của chính người đó
+        // 🟢 BẢO MẬT: Nếu không phải Admin/Finance thì chỉ thấy của mình
         if (!auth()->user()?->isAdmin() && !auth()->user()?->isFinance()) {
             $query->where('user_payments.user_id', auth()->id());
         }
@@ -168,9 +167,6 @@ class UserPaymentResource extends Resource
 
                 Tables\Columns\TextColumn::make('total_vnd')
                     ->label(__('system.labels.total_vnd'))
-                    ->getStateUsing(function ($record) {
-                        return (float) ($record->total_usd ?? 0) * (float) ($record->payout_rate ?? 0);
-                    })
                     ->money('VND', locale: 'vi_VN') // Tự format 25.000.000 ₫
                     ->color('primary')
                     ->weight('bold')
@@ -178,7 +174,6 @@ class UserPaymentResource extends Resource
                     ->summarize(
                         Tables\Columns\Summarizers\Sum::make()
                             ->label('Total')
-                            ->using(fn($query) => $query->sum(\Illuminate\Support\Facades\DB::raw('total_usd * payout_rate')))
                             ->money('VND', locale: 'vi_VN')
                     ),
 
@@ -263,15 +258,16 @@ class UserPaymentResource extends Resource
                     ->label(__('system.labels.user_batch'))
                     ->collapsible()
                     ->getTitleFromRecordUsing(fn($record) => $record->user_batch_label)
+                    ->getKeyFromRecordUsing(fn($record) => $record->user_id . '_' . ($record->batch_id ?? 'N/A'))
                     ->scopeQueryByKeyUsing(function ($query, $key) {
-                        // 🟢 FIX DRILL-DOWN: Key is "User Name | Batch: ID"
-                        if (str_contains($key, ' | Batch: ')) {
-                            $parts = explode(' | Batch: ', $key);
-                            $userName = $parts[0] ?? '';
+                        // 🟢 FIX DRILL-DOWN: Key is "UserID_BatchID"
+                        if (str_contains($key, '_')) {
+                            $parts = explode('_', $key, 2);
+                            $userId = $parts[0] ?? null;
                             $batchId = $parts[1] ?? 'N/A';
 
-                            return $query->whereHas('user', fn($q) => $q->where('name', $userName))
-                                ->when($batchId === 'N/A', fn($q) => $q->whereNull('batch_id'), fn($q) => $q->where('batch_id', $batchId));
+                            return $query->where('user_payments.user_id', $userId)
+                                ->when($batchId === 'N/A', fn($q) => $q->whereNull('user_payments.batch_id'), fn($q) => $q->where('user_payments.batch_id', $batchId));
                         }
                         return $query;
                     }),

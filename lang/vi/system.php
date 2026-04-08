@@ -157,9 +157,16 @@ return [
         'no_batch' => 'Chưa phân mã thanh toán',
         'batch_name' => 'Tên mã thanh toán',
         'note_for_all' => 'Ghi chú cho cả lô',
-        'user_batch' => 'Nhân viên | Mã thanh toán',
+        'user_batch' => 'User | Mã thanh toán',
         'batch_id' => 'Mã thanh toán',
         'quick_set_payment_date' => 'Cập nhật ngày trả',
+        'account_balance' => 'Số dư tài khoản',
+        'transaction_activity' => 'Lịch sử giao dịch',
+        'wallet_name' => 'Tên ví',
+        'current_balance' => 'Số dư hiện tại',
+        'type' => 'Loại',
+        'recipient_email' => 'Email nhận tiền',
+        'payment_description' => 'Nội dung thanh toán',
     ],
 
     'actions' => [
@@ -392,6 +399,7 @@ return [
             'copied' => 'Đã sao chép vào bộ nhớ tạm!',
             'balance_exceeded' => 'Không thể chọn Thương hiệu này vì số dư ($ :balance) vượt quá hạn mức cho phép ($ :limit).',
             'exchanged' => 'Đã quy đổi!',
+            'no_activity' => 'Không tìm thấy lịch sử giao dịch.',
         ],
         'actions' => [
             'exchange_to_vnd' => 'Quy đổi sang VND',

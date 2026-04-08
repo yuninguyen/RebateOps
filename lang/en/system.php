@@ -157,9 +157,16 @@ return [
         'no_batch' => 'No Batch',
         'batch_name' => 'Batch Name',
         'note_for_all' => 'Note for all',
-        'user_batch' => 'Staff | Batch',
+        'user_batch' => 'User | Batch',
         'batch_id' => 'Batch ID',
         'quick_set_payment_date' => 'Update Payment Date',
+        'account_balance' => 'Account Balance',
+        'transaction_activity' => 'Transaction Activity',
+        'wallet_name' => 'Wallet Name',
+        'current_balance' => 'Current Balance',
+        'type' => 'Type',
+        'recipient_email' => 'Recipient Email',
+        'payment_description' => 'Payment Description',
     ],
 
     'actions' => [
@@ -386,6 +393,7 @@ return [
             'copied' => 'Copied to clipboard!',
             'balance_exceeded' => 'This Brand cannot be selected because the balance ($ :balance) exceeds the allowed limit ($ :limit).',
             'exchanged' => 'Exchanged!',
+            'no_activity' => 'No transaction activity found for this wallet.',
         ],
         'actions' => [
             'exchange_to_vnd' => 'Exchange to VND',

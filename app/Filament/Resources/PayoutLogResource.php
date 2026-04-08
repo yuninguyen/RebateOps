@@ -53,7 +53,11 @@ class PayoutLogResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-            ->withCount('children');
+            ->select('payout_logs.*')
+            ->selectRaw("CONCAT(account_id, '_', COALESCE(gc_brand, 'none')) as group_key")
+            ->withCount('children')
+            ->withSum(['children as children_sum' => fn($q) => $q->whereNull('deleted_at')], 'amount_usd')
+            ->withSum(['children as settled_children_sum' => fn($q) => $q->whereNotNull('user_payment_id')], 'amount_usd');
 
         // 2. Khóa chặt thứ tự sắp xếp Cha - Con (Đã fix lỗi SQL Sum cho Sếp)
         $query->orderByRaw('COALESCE(parent_id, id) DESC')->orderBy('id', 'ASC');
@@ -854,22 +858,25 @@ class PayoutLogResource extends Resource
                             }
                         }
 
-                        // 🟢 LOGIC CHO PAYPAL: Dựa trên số dư Ví
+                        // 🟢 LOGIC MỚI: Kiểm tra xem đơn này đã thanh khoản hết sạch chưa (Dựa trên con ĐÃ TẠO, chưa nhất thiết phải chốt)
+                        $totalExchanged = floatval($record->children_sum ?? 0);
+                        $netAmount = floatval($record->net_amount_usd ?? 0);
+                        $isExchanged = $totalExchanged >= $netAmount && $record->children_count > 0;
+
+                        if ($isExchanged) {
+                            return new \Illuminate\Support\HtmlString(
+                                '<div style="color: #6b7280; font-size: 11px; font-weight: bold; margin-top: 2px;">(Exchanged!' . ($dateSuffix ?: '') . ')</div>'
+                            );
+                        }
+
+                        // Nếu là PayPal, kiểm tra thêm số dư ví (Optional)
                         if ($record->asset_type === 'paypal') {
                             $method = $record->payoutMethod;
                             $balance = $method ? $method->current_balance : 0;
 
                             if ($balance <= 0) {
                                 return new \Illuminate\Support\HtmlString(
-                                    '<div style="color: #6b7280; font-size: 11px; font-weight: bold; margin-top: 2px;">(Exchanged!' . ($dateSuffix ?: '') . ')</div>'
-                                );
-                            }
-                        } else {
-                            // 🟢 LOGIC CHO GIFT CARD: Cho phép quy đổi từng phần
-                            $liquidated = $record->children()->where('status', 'completed')->sum('amount_usd') ?? 0;
-                            if ($record->net_amount_usd - $liquidated <= 0.01) {
-                                return new \Illuminate\Support\HtmlString(
-                                    '<div style="color: #6b7280; font-size: 11px; font-weight: bold; margin-top: 2px;">(Exchanged!' . ($dateSuffix ?: '') . ')</div>'
+                                    '<div style="color: #6b7280; font-size: 11px; font-weight: bold; margin-top: 2px;">(No Liquidity' . ($dateSuffix ?: '') . ')</div>'
                                 );
                             }
                         }
@@ -1127,6 +1134,15 @@ class PayoutLogResource extends Resource
                         if (!in_array($record->transaction_type, ['withdrawal', 'hold']))
                             return false;
 
+                        // 🟢 KHÓA CHẶT: Nếu đã chốt sổ 100% (Trực tiếp hoặc đã thanh khoản hết qua con) k cho tạo thêm Exchange
+                        $totalExEx = floatval($record->children_sum ?? 0);
+                        $netAmt = floatval($record->net_amount_usd ?? 0);
+                        $isExchanged = $totalExEx >= $netAmt && $record->children_count > 0;
+                        
+                        if ($record->user_payment_id !== null || $isExchanged) {
+                            return false;
+                        }
+
                         if ($record->asset_type === 'paypal') {
                             return ($record->payoutMethod?->current_balance ?? 0) > 0.01;
                         }
@@ -1136,6 +1152,38 @@ class PayoutLogResource extends Resource
                         return ($record->net_amount_usd - $liquidated) > 0.01;
                     })
                     ->form([
+                        // 🚀 NEW: Phân loại giao dịch (Chỉ dành cho PayPal US)
+                        Forms\Components\Select::make('transaction_category')
+                            ->label('Transaction Category')
+                            ->options([
+                                'send' => 'Send money',
+                                'payment_service' => 'Payment service',
+                            ])
+                            // 🟢 CHỈ HIỆN VỚI PAYPAL US (Check type = paypal_us hoặc location chứa US)
+                            ->visible(fn($record) => 
+                                $record->asset_type === 'paypal' && 
+                                ($record->payoutMethod?->type === 'paypal_us' || str_contains(strtoupper($record->payoutMethod?->location ?? ''), 'US'))
+                            )
+                            ->required(fn($record) => 
+                                $record->asset_type === 'paypal' && 
+                                ($record->payoutMethod?->type === 'paypal_us' || str_contains(strtoupper($record->payoutMethod?->location ?? ''), 'US'))
+                            )
+                            ->native(false)
+                            ->live(),
+
+                        Forms\Components\TextInput::make('recipient_email')
+                            ->label(__('system.labels.recipient_email'))
+                            ->email()
+                            ->required()
+                            ->visible(fn($get) => $get('transaction_category') === 'send')
+                            ->columnSpanFull(),
+
+                        Forms\Components\Textarea::make('payment_description')
+                            ->label(__('system.labels.payment_description'))
+                            ->required()
+                            ->visible(fn($get) => $get('transaction_category') === 'payment_service')
+                            ->columnSpanFull(),
+
                         Forms\Components\TextInput::make('net_amount_usd')
                             ->label(__('system.labels.net_usd'))
                             ->numeric()
@@ -1209,6 +1257,17 @@ class PayoutLogResource extends Resource
                         $cleanVnd = (float) str_replace(['.', ','], '', $data['total_vnd']);
                         $usdAmount = (float) $data['net_amount_usd'];
 
+                        // 🚀 NEW: Tiền tố ghi chú theo loại giao dịch
+                        $categoryPrefix = '';
+                        $category = $data['transaction_category'] ?? null;
+                        if (!empty($category)) {
+                            $categoryPrefix = match ($category) {
+                                'send' => '[SEND] ',
+                                'payment_service' => '[PAYMENT_SERVICE] ',
+                                default => '',
+                            };
+                        }
+
                         \App\Models\PayoutLog::create([
                             'parent_id' => $record->id,
                             'user_id' => $record->user_id,
@@ -1229,7 +1288,10 @@ class PayoutLogResource extends Resource
                             'exchange_rate' => $cleanRate,
                             'total_vnd' => $cleanVnd,
                             'status' => 'completed',
-                            'note' => __('system.labels.liquidity_from_id') . $record->id,
+                            'note' => $categoryPrefix .
+                                ($category === 'send' ? (($data['recipient_email'] ?? '') . ' - ') : '') .
+                                ($category === 'payment_service' ? (($data['payment_description'] ?? '') . ' - ') : '') .
+                                __('system.labels.liquidity_from_id') . $record->id,
                         ]);
 
                         \Filament\Notifications\Notification::make()
@@ -1247,8 +1309,18 @@ class PayoutLogResource extends Resource
                     ->color('gray'), // Màu xám nhẹ nhàng, không lấn át nút cam,
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\RestoreAction::make(), // 🟢 Nút khôi phục dòng bị xóa
-                    Tables\Actions\EditAction::make(),
-                    Tables\Actions\DeleteAction::make(),
+                    Tables\Actions\EditAction::make()
+                        ->hidden(function($record) {
+                            $settledSum = floatval($record->settled_children_sum ?? 0);
+                            $netAmount = floatval($record->net_amount_usd ?? 0);
+                            return $record->user_payment_id !== null || ($settledSum >= $netAmount && $record->children_count > 0);
+                        }), // 🛑 KHÓA KHI ĐÃ CHỐT SỔ 100%
+                    Tables\Actions\DeleteAction::make()
+                        ->hidden(function($record) {
+                            $settledSum = floatval($record->settled_children_sum ?? 0);
+                            $netAmount = floatval($record->net_amount_usd ?? 0);
+                            return $record->user_payment_id !== null || ($settledSum >= $netAmount && $record->children_count > 0);
+                        }), // 🛑 KHÓA KHI ĐÃ CHỐT SỔ 100%
                 ]),
             ])
             ->bulkActions([
@@ -1285,7 +1357,7 @@ class PayoutLogResource extends Resource
                         ->color('success')
                         ->requiresConfirmation()
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
-                            $records->each->update(['status' => 'completed']);
+                            $records->filter(fn($r) => $r->user_payment_id === null)->each->update(['status' => 'completed']);
 
                             // Gợi ý: Gọi Job để sync tất cả lên Sheet sau khi update xong
                             foreach ($records as $record) {
@@ -1332,9 +1404,8 @@ class PayoutLogResource extends Resource
                             $parentIds = $validSelected->map(fn($log) => $log->parent_id ?? $log->id)->unique();
 
                             // Lấy lại danh sách các đơn Gốc (Parent) sạch sẽ từ Database
-                            $parentLogs = \App\Models\PayoutLog::whereIn('id', $parentIds)
-                                ->whereNull('user_payment_id')
-                                ->get();
+                            // 🟢 FIX: Cho phép lấy Parent kể cả khi Parent ĐÃ bị settled, để giải quyết các Child tới sau
+                            $parentLogs = \App\Models\PayoutLog::whereIn('id', $parentIds)->get();
 
                             // 2. GOM NHÓM THÔNG MINH (Chỉ gom các đơn Gốc)
                             $groupedLogs = $parentLogs->groupBy(function ($log) {
@@ -1368,10 +1439,11 @@ class PayoutLogResource extends Resource
 
                                 // 🟢 QUÉT TỪNG ĐƠN GỐC ĐỂ TÍNH TIỀN
                                 foreach ($logs as $log) {
-                                    // 🟢 LẤY TẤT CẢ CON THANH KHOẢN (LIQUIDATION) - Fix lỗi hụt tiền thanh khoản từng phần
+                                    // 🟢 CHỈ LẤY CÁC CON THANH KHOẢN CHƯA BỊ CHỐT SỔ (user_payment_id IS NULL)
                                     $liquidationChildren = $log->children()
                                         ->where('transaction_type', 'liquidation')
                                         ->where('status', 'completed')
+                                        ->whereNull('user_payment_id')
                                         ->get();
 
                                     $usd = 0;
@@ -1386,14 +1458,21 @@ class PayoutLogResource extends Resource
                                             $childIdsToUpdate[] = $child->id;
                                         }
                                     } else {
-                                        // Nếu chưa thanh khoản (Fallback - hiếm khi xảy ra)
-                                        $usd = (float) $log->net_amount_usd;
-                                        $vndMarket = (float) $log->total_vnd; // Nếu sếp không thanh khoản thì thường = 0
+                                        // 🟢 CHỈ THANH TOÁN PARENT NẾU PARENT CHƯA BỊ CHỐT SỔ
+                                        if (is_null($log->user_payment_id)) {
+                                            $usd = (float) $log->net_amount_usd;
+                                            $vndMarket = (float) $log->total_vnd;
+                                            $parentIdsToUpdate[] = $log->id;
+                                        }
                                     }
 
                                     $totalUsd += $usd;
                                     $totalVndMarket += $vndMarket;
-                                    $parentIdsToUpdate[] = $log->id;
+                                }
+
+                                // 🟢 Nếu cả Parent và Children đều đã chốt sổ hết => Skip nhóm này
+                                if ($totalUsd <= 0) {
+                                    continue;
                                 }
 
                                 // Tính tỷ giá thị trường trung bình
@@ -1442,37 +1521,48 @@ class PayoutLogResource extends Resource
                         ->deselectRecordsAfterCompletion(),
 
                     Tables\Actions\RestoreBulkAction::make(),     // 🟢 Khôi phục nhiều dòng
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            $unlockedRecords = $records->filter(fn($record) => $record->user_payment_id === null);
+                            $lockedCount = $records->count() - $unlockedRecords->count();
+
+                            if ($lockedCount > 0) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title("Cannot delete $lockedCount settled records.")
+                                    ->warning()
+                                    ->send();
+                            }
+
+                            $unlockedRecords->each->delete();
+                        }),
                 ]),
             ])
             ->groups([
                 // 🟢 GROUPING THEO ACCOUNT + BRAND (Sử dụng Composite Key)
-                // 🛑 QUAN TRỌNG: Đặt tên Group là 'account_id' (cột thật) để Filament không báo lỗi Order Clause
-                // Nhưng bucket (key) vẫn là AccountID_Brand để tách biệt Nike/Groupon chuẩn đét cho Sếp.
-                Tables\Grouping\Group::make('account_id')
-                    ->label(__('system.labels.account'))
+                Tables\Grouping\Group::make('group_key')
+                    ->label(__('system.labels.account') . ' & ' . __('system.labels.brand'))
                     ->collapsible()
                     ->getTitleFromRecordUsing(function ($record) {
-                        return $record->account?->email?->email ?? __('system.n/a');
+                        $email = $record->account?->email?->email ?? __('system.n/a');
+                        $brand = $record->gc_brand ? ucwords(str_replace(['_', '-'], ' ', $record->gc_brand)) : null;
+                        
+                        return $brand ? "$email | Brand: $brand" : $email;
                     })
-                    ->getKeyFromRecordUsing(function ($record) {
-                        // 🟢 FIX: Dùng ID Account + Brand để tách biệt các dòng. 
-                        // Nếu đã chốt sổ thì dùng user_payment_id để phân từng cụm thanh toán.
-                        return ($record->user_payment_id ?? $record->account_id) . '_' . strtolower($record->gc_brand ?? '');
-                    })
+                    ->getKeyFromRecordUsing(fn($record) => $record->group_key)
                     ->scopeQueryByKeyUsing(function (Builder $query, $key) {
-                        // 🟢 TÁCH KEY: [paymentOrAccountId]_[brand]
+                        // 🟢 TÁCH KEY: [accountId]_[brand]
                         $parts = explode('_', $key);
-                        $paymentOrAccountId = $parts[0] ?? null;
-                        $brand = $parts[1] ?? '';
+                        $accountId = $parts[0] ?? null;
+                        $brand = $parts[1] ?? 'none';
 
-                        return $query->where(function ($q) use ($paymentOrAccountId, $brand) {
-                            $q->where(fn($sub) => $sub->where('user_payment_id', $paymentOrAccountId)->orWhere('account_id', $paymentOrAccountId))
-                                ->when($brand, fn($sub) => $sub->whereRaw('LOWER(gc_brand) = ?', [$brand]), fn($sub) => $sub->whereNull('gc_brand'));
-                        });
+                        return $query->where('payout_logs.account_id', $accountId)
+                            ->when($brand !== 'none', 
+                                fn($sub) => $sub->where('payout_logs.gc_brand', $brand), 
+                                fn($sub) => $sub->whereNull('payout_logs.gc_brand')
+                            );
                     }),
             ])
-            ->defaultGroup('account_id');
+            ->defaultGroup('group_key');
     }
 
     // 🟢 HÀM HELPER: Tính số dư khả dụng duy nhất tại đây (DRY) + Cache per-request
