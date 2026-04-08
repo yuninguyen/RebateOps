@@ -14,9 +14,12 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\IconPosition;
 use Illuminate\Database\Eloquent\Model;
 use App\Filament\Resources\Traits\HasPlatform;
 use Filament\Tables\Enums\FiltersLayout;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Facades\Blade;
 
 
 class UserPaymentResource extends Resource
@@ -54,18 +57,23 @@ class UserPaymentResource extends Resource
     // 🟢 1. PHÂN QUYỀN DỮ LIỆU: Staff chỉ thấy lương của mình
     public static function getEloquentQuery(): Builder
     {
-        // 🟢 Sắp xếp: Pending (desc) lên trên, sau đó mới đến Paid. Tiếp theo là Created At (desc)
+        // 🟢 LUÔN LẤY CHI TIẾT: Không dùng GROUP BY trong SQL nữa để bảo toàn từng dòng lẻ của Sếp
         $query = parent::getEloquentQuery()
-            ->addSelect([
-                '*',
-                \Illuminate\Support\Facades\DB::raw("CASE WHEN transaction_type LIKE 'Gift Card%' THEN 'gift_card' ELSE 'paypal' END as asset_group")
+            ->with(['payoutLogs.account.email'])
+            ->leftJoin('users', 'user_payments.user_id', '=', 'users.id')
+            ->select([
+                'user_payments.*',
+                \Illuminate\Support\Facades\DB::raw("COALESCE(user_payments.batch_id, 'no_batch') as batch_label"),
+                \Illuminate\Support\Facades\DB::raw("CONCAT(users.name, ' | Batch: ', COALESCE(user_payments.batch_id, 'N/A')) as user_batch_label"),
             ])
-            ->orderBy('status', 'desc')
-            ->orderBy('created_at', 'desc');
+            ->reorder()
+            ->orderByRaw('status = "pending" DESC')
+            ->orderBy('user_payments.batch_id', 'desc')
+            ->orderBy('user_payments.created_at', 'desc');
 
         // Nếu không phải Admin và không phải Finance, ép query chỉ tìm user_id của chính người đó
         if (!auth()->user()?->isAdmin() && !auth()->user()?->isFinance()) {
-            $query->where('user_id', auth()->id());
+            $query->where('user_payments.user_id', auth()->id());
         }
 
         return $query;
@@ -103,6 +111,10 @@ class UserPaymentResource extends Resource
                             ->required()
                             ->native(false),
 
+                        Forms\Components\DatePicker::make('payment_date')
+                            ->label(__('system.labels.payment_date'))
+                            ->native(false),
+
                         Forms\Components\FileUpload::make('payment_proof')
                             ->label(__('system.user_payments.fields.payment_proof'))
                             ->image()
@@ -122,32 +134,30 @@ class UserPaymentResource extends Resource
     {
         return $table
             ->columns([
-                // Cột Tên Staff (Tự động ẩn đi nếu Staff đang xem để đỡ chật màn hình)
-                Tables\Columns\TextColumn::make('user.name')
-                    ->label(__('system.labels.user'))
-                    ->alignment(Alignment::Center)
-                    ->searchable()
-                    ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()),
-
-                Tables\Columns\TextColumn::make('platform')
-                    ->label(__('system.labels.platform'))
-                    ->alignment(Alignment::Center)
-                    ->formatStateUsing(function ($state) {
-                        return \App\Models\Platform::where('slug', $state)->value('name') 
-                            ?? ucwords(str_replace(['_', '-'], ' ', $state ?? ''));
-                    }),
-
                 Tables\Columns\TextColumn::make('transaction_type')
                     ->label(__('system.labels.description'))
-                    ->formatStateUsing(fn($state) => str_replace(['(', ')'], ['- ', ''], $state))
+                    ->formatStateUsing(function ($record, $state) {
+                        return str_replace(['(', ')'], ['- ', ''], $state);
+                    })
                     ->description(function ($record) {
+                        // 🟢 DÒNG 2: Danh sách email account
+                        $emails = $record->payoutLogs->map(fn($log) => $log->account?->email?->email)->filter()->unique();
+                        $emailList = $emails->isNotEmpty() ? $emails->implode(', ') : __('system.n/a');
+                        $accLine = "📧 Account: {$emailList}";
+
+                        // 🟢 DÒNG 3: Tỉ giá (Market rate & Payout rate)
+                        $rateLine = '';
                         if (auth()->user()?->isAdmin() || auth()->user()?->isFinance()) {
-                            return __('system.payout_logs.fields.market_rate') . ': ' . number_format($record->exchange_rate) . ' | ' . __('system.payout_logs.fields.payout_rate') . ': ' . number_format($record->payout_rate) . ' (' . ($record->payout_percentage ?? 100) . '%)';
+                            $rateLine = "📈 " . __('system.payout_logs.fields.market_rate') . ': ' . number_format($record->exchange_rate) . ' | ' . __('system.payout_logs.fields.payout_rate') . ': ' . number_format($record->payout_rate) . ' (' . ($record->payout_percentage ?? 100) . '%)';
+                        } else {
+                            $rateLine = "📈 " . __('system.labels.exchange_rate') . ': ' . number_format($record->payout_rate);
                         }
-                        return __('system.labels.exchange_rate') . ': ' . number_format($record->payout_rate);
+
+                        // Trả về HTML với thẻ <br> để cưỡng chế xuống dòng (Dòng 2 & Dòng 3)
+                        return new \Illuminate\Support\HtmlString("{$accLine}<br>{$rateLine}");
                     })
                     ->searchable()
-                    ->alignment(Alignment::Center),
+                    ->alignment(Alignment::Center), // Chỉnh sát lề trái để dễ đọc hơn khi nhiều dòng
 
                 Tables\Columns\TextColumn::make('total_usd')
                     ->label(__('system.labels.rebate_amount_usd'))
@@ -158,11 +168,19 @@ class UserPaymentResource extends Resource
 
                 Tables\Columns\TextColumn::make('total_vnd')
                     ->label(__('system.labels.total_vnd'))
+                    ->getStateUsing(function ($record) {
+                        return (float) ($record->total_usd ?? 0) * (float) ($record->payout_rate ?? 0);
+                    })
                     ->money('VND', locale: 'vi_VN') // Tự format 25.000.000 ₫
                     ->color('primary')
                     ->weight('bold')
                     ->alignment(Alignment::Center)
-                    ->summarize(Tables\Columns\Summarizers\Sum::make()->label('Total')->money('VND', locale: 'vi_VN')),
+                    ->summarize(
+                        Tables\Columns\Summarizers\Sum::make()
+                            ->label('Total')
+                            ->using(fn($query) => $query->sum(\Illuminate\Support\Facades\DB::raw('total_usd * payout_rate')))
+                            ->money('VND', locale: 'vi_VN')
+                    ),
 
 
                 Tables\Columns\TextColumn::make('status')
@@ -174,25 +192,91 @@ class UserPaymentResource extends Resource
                         'paid' => 'success',
                         default => 'gray',
                     })
-                    ->formatStateUsing(fn(string $state): string => match ($state) {
-                        'pending' => __('system.status.pending'),
-                        'paid' => __('system.status.completed'),
-                        default => $state,
-                    }),
+                    ->formatStateUsing(fn(string $state) => new \Illuminate\Support\HtmlString('
+                        <div class="flex items-center gap-1.5 justify-center">
+                            <span>' . __('system.status.' . ($state === 'paid' ? 'completed' : $state)) . '</span>
+                                ' . \Illuminate\Support\Facades\Blade::render('<x-heroicon-m-pencil-square class="w-4 h-4 text-gray-400" />') . '
+                         </div>
+                    '))
+                    ->action(
+                        Tables\Actions\Action::make('quick_set_status')
+                            ->label(__('system.labels.quick_set_status'))
+                            ->modalHeading(__('system.labels.quick_set_status'))
+                            ->modalSubmitActionLabel('Gửi')
+                            ->modalCancelActionLabel('Hủy bỏ')
+                            ->form([
+                                Forms\Components\Select::make('status')
+                                    ->label(__('system.labels.status'))
+                                    ->options([
+                                        'pending' => __('system.status.pending'),
+                                        'paid' => __('system.status.completed'),
+                                    ])
+                                    ->default(fn($record) => $record->status)
+                                    ->required(),
+                            ])
+                            ->action(function ($record, array $data) {
+                                $record->update($data);
 
-                Tables\Columns\TextColumn::make('created_at')
-                    ->label(__('system.labels.settlement_date'))
-                    ->dateTime('d/m/Y H:i')
-                    ->alignment(Alignment::Center),
+                                \Filament\Notifications\Notification::make()
+                                    ->title(__('system.notifications.status_updated_sync'))
+                                    ->success()
+                                    ->send();
+                            })
+                    ),
+
+                Tables\Columns\TextColumn::make('payment_date')
+                    ->label(__('system.labels.payment_date'))
+                    ->state(fn($record) => $record->payment_date ? $record->payment_date : 'N/A')
+                    ->formatStateUsing(function ($state) {
+                        if ($state === 'N/A')
+                            return __('system.n/a');
+                        return \Carbon\Carbon::parse($state)->format('d/m/Y');
+                    })
+                    ->alignment(Alignment::Center)
+                    ->icon('heroicon-m-pencil-square')
+                    ->iconPosition(IconPosition::After)
+                    ->iconColor('gray')
+                    ->action(
+                        Tables\Actions\Action::make('quick_set_payment_date')
+                            ->label(__('system.labels.quick_set_date'))
+                            ->modalHeading(__('system.labels.quick_set_date'))
+                            ->modalSubmitActionLabel('Gửi')
+                            ->modalCancelActionLabel('Hủy bỏ')
+                            ->form([
+                                Forms\Components\DatePicker::make('payment_date')
+                                    ->label(__('system.labels.payment_date'))
+                                    ->default(fn($record) => $record->payment_date ?? now())
+                                    ->required(),
+                            ])
+                            ->action(function ($record, array $data) {
+                                $record->update($data);
+
+                                \Filament\Notifications\Notification::make()
+                                    ->title(__('system.notifications.date_updated_sync'))
+                                    ->success()
+                                    ->send();
+                            })
+                    ),
             ])
             ->groups([
-                Tables\Grouping\Group::make('asset_group')
-                    ->label(__('system.labels.revenue_split'))
-                    ->getTitleFromRecordUsing(function ($record) {
-                        return $record->asset_group === 'gift_card' ? '🎁 Gift Card' : '💰 PayPal';
-                    })
+                Tables\Grouping\Group::make('user_batch_label')
+                    ->label(__('system.labels.user_batch'))
+                    ->collapsible()
+                    ->getTitleFromRecordUsing(fn($record) => $record->user_batch_label)
+                    ->scopeQueryByKeyUsing(function ($query, $key) {
+                        // 🟢 FIX DRILL-DOWN: Key is "User Name | Batch: ID"
+                        if (str_contains($key, ' | Batch: ')) {
+                            $parts = explode(' | Batch: ', $key);
+                            $userName = $parts[0] ?? '';
+                            $batchId = $parts[1] ?? 'N/A';
+
+                            return $query->whereHas('user', fn($q) => $q->where('name', $userName))
+                                ->when($batchId === 'N/A', fn($q) => $q->whereNull('batch_id'), fn($q) => $q->where('batch_id', $batchId));
+                        }
+                        return $query;
+                    }),
             ])
-            ->defaultGroup('asset_group')
+            ->defaultGroup('user_batch_label')
             ->filters([
                 // 1. Lọc theo Platform (Sàn) — CHỈ HIỆN SÀN CÓ DỮ LIỆU THỰC TẾ
                 Tables\Filters\SelectFilter::make('platform')
@@ -220,7 +304,7 @@ class UserPaymentResource extends Resource
                 Tables\Filters\Filter::make('created_from')
                     ->form([
                         Forms\Components\DatePicker::make('from')
-                            ->label(__('system.labels.settlement_date') . ' - ' . __('system.labels.from')),
+                            ->label(__('system.labels.payment_date') . ' - ' . __('system.labels.from')),
                     ])
                     ->query(fn(Builder $query, array $data): Builder => $query->when($data['from'], fn(Builder $query, $date): Builder => $query->whereDate('created_at', '>=', $date)))
                     ->indicateUsing(fn(array $data): array => ($data['from'] ?? null) ? ['From ' . \Carbon\Carbon::parse($data['from'])->format('d/m/Y')] : []),
@@ -229,7 +313,7 @@ class UserPaymentResource extends Resource
                 Tables\Filters\Filter::make('created_until')
                     ->form([
                         Forms\Components\DatePicker::make('until')
-                            ->label(__('system.labels.settlement_date') . ' - ' . __('system.labels.until')),
+                            ->label(__('system.labels.payment_date') . ' - ' . __('system.labels.until')),
                     ])
                     ->query(fn(Builder $query, array $data): Builder => $query->when($data['until'], fn(Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date)))
                     ->indicateUsing(fn(array $data): array => ($data['until'] ?? null) ? ['Until ' . \Carbon\Carbon::parse($data['until'])->format('d/m/Y')] : []),
@@ -242,6 +326,60 @@ class UserPaymentResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
+                    // 🟢 1. GOM NHÓM (BATCHING)
+                    Tables\Actions\BulkAction::make('batchSelected')
+                        ->label(__('system.user_payments.actions.batch_selected'))
+                        ->icon('heroicon-o-rectangle-group')
+                        ->color('info')
+                        ->form([
+                            Forms\Components\TextInput::make('batch_id')
+                                ->label(__('system.labels.batch_name'))
+                                ->placeholder('e.g. Weekly Payout - Week 14')
+                                ->required(),
+                        ])
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data): void {
+                            $records->each->update(['batch_id' => $data['batch_id']]);
+                        })
+                        ->deselectRecordsAfterCompletion()
+                        ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()),
+
+                    // 🟢 2. GỠ NHÓM (UNBATCH)
+                    Tables\Actions\BulkAction::make('unbatchSelected')
+                        ->label(__('system.user_payments.actions.unbatch_selected'))
+                        ->icon('heroicon-o-x-circle')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records): void {
+                            $records->each->update(['batch_id' => null]);
+                        })
+                        ->deselectRecordsAfterCompletion()
+                        ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()),
+
+                    // 🟢 3. THANH TOÁN CẢ LÔ (PAY BATCH)
+                    Tables\Actions\BulkAction::make('payOutBatch')
+                        ->label(__('system.user_payments.actions.pay_out_batch'))
+                        ->icon('heroicon-o-check-circle')
+                        ->color('success')
+                        ->form([
+                            Forms\Components\FileUpload::make('payment_proof')
+                                ->label(__('system.user_payments.fields.payment_proof'))
+                                ->image()
+                                ->directory('payment-proofs')
+                                ->openable()
+                                ->downloadable(),
+                            Forms\Components\Textarea::make('note')
+                                ->label(__('system.labels.note_for_all')),
+                        ])
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data): void {
+                            $records->each->update([
+                                'status' => 'paid',
+                                'payment_proof' => $data['payment_proof'] ?? null,
+                                'note' => $data['note'] ?? null,
+                            ]);
+                        })
+                        ->deselectRecordsAfterCompletion()
+                        ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()),
+
                     Tables\Actions\DeleteBulkAction::make()
                         ->visible(fn() => auth()->user()?->isAdmin() || auth()->user()?->isFinance()),
                 ]),

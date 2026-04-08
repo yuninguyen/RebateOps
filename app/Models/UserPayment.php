@@ -34,8 +34,18 @@ class UserPayment extends Model
         'total_vnd',
         'profit_vnd',
         'status', // pending, paid
+        'batch_id',
+        'asset_group',
+        'payment_date',
         'payment_proof',
         'note',
+    ];
+
+    /**
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'payment_date' => 'datetime',
     ];
 
     // Cấu hình máy quay: Báo nó theo dõi cái gì
@@ -58,4 +68,13 @@ class UserPayment extends Model
     {
         return $this->hasMany(PayoutLog::class);
     }
+
+    // 🟢 ACCESSOR: Tính tổng tiền của cả Batch để hiện trên tiêu đề Group
+    public function getTotalVndPayoutForBatchAttribute(): float
+    {
+        if (empty($this->batch_id)) return $this->total_vnd;
+
+        return static::where('batch_id', $this->batch_id)->sum('total_vnd');
+    }
 }
+

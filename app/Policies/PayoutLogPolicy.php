@@ -7,6 +7,9 @@ use App\Models\User;
 
 class PayoutLogPolicy
 {
+    /**
+     * Admin và Finance có toàn quyền - không kiểm tra thêm.
+     */
     public function before(User $user, string $ability): bool|null
     {
         if ($user->isAdmin() || $user->isFinance()) {
@@ -32,9 +35,13 @@ class PayoutLogPolicy
     }
 
     // Staff sửa record của mình (chưa completed)
+    /**
+     * Trước đây: return $log->user_id === $user->id;
+     * Lỗi: Staff có thể sửa đơn đã 'completed', dẫn đến sai số dư ví.
+     */
     public function update(User $user, PayoutLog $log): bool
     {
-        return $log->user_id === $user->id;
+        return $log->user_id === $user->id && $log->status !== 'completed';
     }
 
     public function delete(User $user, PayoutLog $log): bool

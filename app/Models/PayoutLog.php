@@ -19,30 +19,7 @@ class PayoutLog extends Model
     /**
      * CỜ ĐỒNG BỘ: Ngăn chặn vòng lặp vô tận khi đồng bộ từ Google Sheets
      */
-    public bool $is_syncing_from_sheet = false;
-
-    protected static function booted(): void
-    {
-        // 🟢 TỰ ĐỘNG HOÀN THÀNH ĐƠN RÚT TIỀN KHI CÓ LỆNH ĐỔI TIỀN (LIQUIDATION)
-        static::created(function (PayoutLog $record) {
-            if ($record->transaction_type === 'liquidation' && $record->parent_id) {
-                $parent = $record->parent;
-                if ($parent && $parent->status !== 'completed') {
-                    $parent->update(['status' => 'completed']);
-                }
-            }
-        });
-
-        static::updated(function (PayoutLog $record) {
-            if ($record->transaction_type === 'liquidation' && $record->parent_id) {
-                $parent = $record->parent;
-                if ($parent && $parent->status !== 'completed') {
-                    $parent->update(['status' => 'completed']);
-                }
-            }
-        });
-    }
-
+    protected bool $is_syncing_from_sheet = false;
     protected $fillable = [
         // --- Các trường định danh ---
         'user_id',              // 🟢 MỚI: Người thực hiện giao dịch
@@ -73,14 +50,14 @@ class PayoutLog extends Model
     ];
 
     protected $casts = [
-        'gc_code'          => 'encrypted',
-        'gc_pin'           => 'encrypted',
-        'amount_usd'       => 'decimal:2',
-        'fee_usd'          => 'decimal:2',
-        'net_amount_usd'   => 'decimal:2',
+        'gc_code' => 'encrypted',
+        'gc_pin' => 'encrypted',
+        'amount_usd' => 'decimal:2',
+        'fee_usd' => 'decimal:2',
+        'net_amount_usd' => 'decimal:2',
         'boost_percentage' => 'decimal:2',
-        'exchange_rate'    => 'decimal:2',
-        'total_vnd'        => 'decimal:0',
+        'exchange_rate' => 'decimal:2',
+        'total_vnd' => 'decimal:0',
     ];
 
     // Cấu hình theo dõi toàn bộ các cột được phép điền
@@ -92,7 +69,9 @@ class PayoutLog extends Model
             ->dontSubmitEmptyLogs();
     }
 
-
+    // =========================================================================
+    // RELATIONS
+    // =========================================================================
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');

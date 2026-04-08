@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Traits;
 
 use Filament\Infolists\Infolist;
 use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\IconPosition;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -668,6 +669,8 @@ trait HasTrackerSchema
                     })
                     // 3. Các thuộc tính giao diện (Badge và Icon sẽ hiện cho cả N/A)
                     ->icon('heroicon-m-pencil-square')
+                    ->iconPosition(IconPosition::After)
+                    ->iconColor('gray')
                     // 4. Action bấm vào để sửa
                     ->action(
                         Tables\Actions\Action::make('quick_set_date')

@@ -78,6 +78,7 @@ return [
 
     // COMMON LABELS (FORMS/TABLES)
     'labels' => [
+        'account' => 'Tài khoản',
         'user' => 'Người dùng',
         'platform' => 'Nền tảng',
         'account_email' => 'Tài khoản',
@@ -125,7 +126,7 @@ return [
         'description' => 'Mô tả',
         'rebate_amount_usd' => 'Số tiền Rebate ($)',
         'profit' => 'Lợi nhuận',
-        'settlement_date' => 'Ngày quyết toán',
+        'payment_date' => 'Ngày thanh toán',
         'from' => 'Từ ngày',
         'until' => 'Đến ngày',
         'order_date' => 'Ngày đặt hàng',
@@ -152,6 +153,13 @@ return [
         'quick_set_status' => 'Cập nhật trạng thái',
         'quick_set_date' => 'Cập nhật ngày rút',
         'select_payout_date' => 'Chọn ngày rút tiền',
+        'batch' => 'Lô thanh toán',
+        'no_batch' => 'Chưa phân lô',
+        'batch_name' => 'Tên lô',
+        'note_for_all' => 'Ghi chú cho cả lô',
+        'user_batch' => 'Nhân viên | Batch',
+        'batch_id' => 'Mã lô',
+        'quick_set_payment_date' => 'Cập nhật ngày trả',
     ],
 
     'actions' => [
@@ -396,6 +404,9 @@ return [
         'actions' => [
             'up_bill' => 'Tải biên lai',
             'view_bill' => 'Xem biên lai',
+            'batch_selected' => 'Gom nhóm thanh toán',
+            'unbatch_selected' => 'Gỡ khỏi nhóm',
+            'pay_out_batch' => 'Thanh toán cả lô',
         ],
     ],
     'payout_methods' => [
@@ -486,4 +497,5 @@ return [
         ],
     ],
 ];
+
 

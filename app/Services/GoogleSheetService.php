@@ -17,7 +17,7 @@ class GoogleSheetService
     public function __construct()
     {
         try {
-            // Láº¥y cáº¥u hÃ¬nh ID
+            // Lấy cấu hình ID
             $this->spreadsheetId = config('services.google.spreadsheet_id');
 
             // ðŸŸ¢ FIX: DÃ¹ng storage_path Ä‘á»ƒ luÃ´n táº¡o ra Ä‘Æ°á»ng dáº«n tuyá»‡t Ä‘á»‘i (Absolute Path)
@@ -63,7 +63,8 @@ class GoogleSheetService
             }
         }
 
-        if ($sheetId === null) return;
+        if ($sheetId === null)
+            return;
 
         $requests = [
             // 1. ÄÃ³ng bÄƒng 1 hÃ ng Ä‘áº§u tiÃªn
@@ -87,7 +88,7 @@ class GoogleSheetService
                     'cell' => [
                         'userEnteredFormat' => [
                             'textFormat' => ['bold' => true],
-                            'backgroundColor' => ['red' => 0.9, 'green' => 0.9, 'blue' => 0.9], // MÃ u xÃ¡m nháº¡t
+                            'backgroundColor' => ['red' => 0.9, 'green' => 0.9, 'blue' => 0.9], // Màu xám nhạt
                         ]
                     ],
                     'fields' => 'userEnteredFormat(textFormat,backgroundColor)'
@@ -100,16 +101,16 @@ class GoogleSheetService
     }
 
     /**
-     * HÃ m phá»¥ trá»£: Tá»± Ä‘á»™ng láº¥y tÃªn Tab Ä‘áº§u tiÃªn trong file Google Sheet
+     * Hàm phụ trợ: Tự động lấy tên Tab đầu tiên trong file Google Sheet
      */
     private function getFirstSheetName()
     {
-        $spreadsheet = $this->service->spreadsheets->get($this->spreadsheetId);
-        return $spreadsheet->getSheets()[0]->getProperties()->getTitle();
+        $sheets = $this->getCachedSheetInfo();
+        return array_key_first($sheets);
     }
 
     // ==========================================
-    // CHIá»€U 1: WEB -> SHEET (ThÃªm má»™t dÃ²ng má»›i)
+    //  CHIỀU 1: WEB -> SHEET (Thêm một dòng mới)
     // ==========================================
     public function appendRow(array $data, ?string $sheetName = null)
     {
@@ -192,7 +193,7 @@ class GoogleSheetService
     }
 
     // ==========================================
-    // Cáº¬P NHáº¬T SHEET (Ghi Ä‘Ã¨ láº¡i toÃ n bá»™)
+    // CẬP NHẬT SHEET (Ghi đè lại toàn bộ)
     // ==========================================
     public function updateSheet(array $values, $range = 'A1:AC', ?string $sheetName = null)
     {
@@ -247,7 +248,7 @@ class GoogleSheetService
                 foreach ($existingIds as $index => $row) {
                     if (isset($row[0]) && trim($row[0]) !== '') {
                         // 🟢 FIX BUG #10: Bắt đầu từ hàng 2, nên index 0 của bảng dữ liệu là hàng 2 trên Sheet
-                        $idMap[(string)$row[0]] = $index + 2;
+                        $idMap[(string) $row[0]] = $index + 2;
                     }
                 }
             }
@@ -257,17 +258,17 @@ class GoogleSheetService
 
             foreach ($dataRows as $rowData) {
                 // Đảm bảo mỗi dòng là một mảng phẳng, chỉ chứa chuỗi (sequential string array)
-                $rawRow = is_array($rowData) ? $rowData : (array)$rowData;
+                $rawRow = is_array($rowData) ? $rowData : (array) $rowData;
                 $row = [];
                 foreach ($rawRow as $val) {
-                    $row[] = ($val === null) ? '' : (string)$val;
+                    $row[] = ($val === null) ? '' : (string) $val;
                 }
-                
-                $id = isset($row[0]) ? (string)$row[0] : '';
+
+                $id = isset($row[0]) ? (string) $row[0] : '';
 
                 if ($id !== '' && isset($idMap[$id])) {
                     $rowNumber = $idMap[$id];
-                    
+
                     $vr = new \Google\Service\Sheets\ValueRange();
                     $vr->setRange("{$safeSheetName}!A{$rowNumber}");
                     $vr->setValues([$row]);
@@ -281,14 +282,14 @@ class GoogleSheetService
                 $batchRequest = new \Google\Service\Sheets\BatchUpdateValuesRequest();
                 $batchRequest->setValueInputOption('RAW');
                 $batchRequest->setData($updateData);
-                
+
                 $this->service->spreadsheets_values->batchUpdate($this->spreadsheetId, $batchRequest);
             }
 
 
 
-            // ðŸŸ¢ FIX BUG THIáº¾U HEADER: 
-            // Náº¿u tab má»›i hoÃ n toÃ n (idMap rá»—ng), chÃ¨n Header lÃªn Ä‘áº§u máº£ng dá»¯ liá»‡u chuáº©n bá»‹ Ä‘áº©y lÃªn
+            // 🟢 FIX BUG THIẾU HEADER: 
+            // Nếu tab mới hoàn toàn (idMap rỗng), chèn Header lên đầu mảng dữ liệu chuẩn bị đẩy lên
             if (!empty($headers) && empty($idMap)) {
                 array_unshift($appendData, $headers);
             }
@@ -328,18 +329,19 @@ class GoogleSheetService
     // ==========================================
     public function formatColumnsAsClip(string $sheetName, int $startColIndex, int $endColIndex)
     {
-        // ðŸŸ¢ FIX N+1: Láº¥y ID tá»« Cache cá»±c nhanh
+        // 🟢 FIX N+1: Lấy ID từ Cache cực nhanh
         $sheetId = $this->getSheetIdByName($sheetName);
-        if ($sheetId === null) return;
+        if ($sheetId === null)
+            return;
 
-        // 2. Táº¡o Request Ã©p Ä‘á»‹nh dáº¡ng WrapStrategy thÃ nh CLIP
+        // 2. Tạo Request ép định dạng WrapStrategy thành CLIP
         $requests = [
             new \Google\Service\Sheets\Request([
                 'repeatCell' => [
                     'range' => [
                         'sheetId' => $sheetId,
-                        'startColumnIndex' => $startColIndex, // Cá»™t báº¯t Ä‘áº§u (TÃ­nh tá»« 0)
-                        'endColumnIndex' => $endColIndex,     // Cá»™t káº¿t thÃºc (Exclusive)
+                        'startColumnIndex' => $startColIndex, // Cột bắt đầu (Tính từ 0)
+                        'endColumnIndex' => $endColIndex,     // Cột kết thúc (Exclusive)
                     ],
                     'cell' => [
                         'userEnteredFormat' => [
@@ -351,7 +353,7 @@ class GoogleSheetService
             ])
         ];
 
-        // 3. Thá»±c thi lá»‡nh Format
+        // 3. Thực thi lệnh Format
         $batchUpdateRequest = new \Google\Service\Sheets\BatchUpdateSpreadsheetRequest([
             'requests' => $requests
         ]);
@@ -364,29 +366,32 @@ class GoogleSheetService
     // ==========================================
     public function deleteRowsByIds(array $ids, ?string $sheetName = null)
     {
-        if (empty($ids)) return;
+        if (empty($ids))
+            return;
 
         try {
             $targetSheet = $sheetName ?? $this->getFirstSheetName();
 
-            // ðŸŸ¢ FIX N+1: Láº¥y ID tá»« Cache cá»±c nhanh
+            // 🟢 FIX N+1: Lấy ID từ Cache cực nhanh
             $sheetId = $this->getSheetIdByName($targetSheet);
-            if ($sheetId === null) return;
+            if ($sheetId === null)
+                return;
 
             $existingData = $this->readSheet('A1:AC', $targetSheet);
             $indicesToDelete = [];
 
             if (!empty($existingData)) {
                 foreach ($existingData as $index => $row) {
-                    if (isset($row[0]) && in_array((string)$row[0], $ids)) {
+                    if (isset($row[0]) && in_array((string) $row[0], $ids)) {
                         $indicesToDelete[] = $index;
                     }
                 }
             }
 
-            if (empty($indicesToDelete)) return;
+            if (empty($indicesToDelete))
+                return;
 
-            // Xáº¿p giáº£m dáº§n Ä‘á»ƒ khi xÃ³a dÃ²ng dÆ°á»›i khÃ´ng lÃ m thay Ä‘á»•i index cá»§a dÃ²ng trÃªn
+            // Xếp giảm dần để khi xóa dòng dưới không làm thay đổi index của dòng trên
             rsort($indicesToDelete);
 
             $requests = [];
@@ -483,7 +488,7 @@ class GoogleSheetService
         return $this->spreadsheetId;
     }
 
-    // HÃ m kiá»ƒm tra vÃ  tá»± táº¡o Tab náº¿u chÆ°a cÃ³
+    // Hàm kiểm tra và tự tạo Tab nếu chưa có
     public function createSheetIfNotExist(string $sheetName)
     {
         // ðŸŸ¢ Äá»c tá»« Cache thay vÃ¬ gá»i API
@@ -493,7 +498,7 @@ class GoogleSheetService
             return; // ÄÃ£ tá»“n táº¡i, thoÃ¡t ra
         }
 
-        // Náº¿u chÆ°a cÃ³, gá»­i lá»‡nh táº¡o má»›i
+        // Nếu chưa có, gửi lệnh tạo mới
         $body = new \Google\Service\Sheets\BatchUpdateSpreadsheetRequest([
             'requests' => [
                 new \Google\Service\Sheets\Request([
@@ -577,7 +582,7 @@ class GoogleSheetService
     }
 
     /**
-     * ðŸŸ¢ HÃ€M Má»šI: Láº¥y danh sÃ¡ch Sheet lÆ°u vÃ o Cache 60 phÃºt
+     * 🟢 HÀM MỚI: Lấy danh sách Sheet lưu vào Cache 60 phút
      */
     private function getCachedSheetInfo()
     {
@@ -587,7 +592,7 @@ class GoogleSheetService
             $spreadsheet = $this->service->spreadsheets->get($this->spreadsheetId);
             $info = [];
             foreach ($spreadsheet->getSheets() as $sheet) {
-                // LÆ°u thÃ nh máº£ng: ['TÃªn Tab' => ID_Cá»§a_Tab]
+                // Lưu thành mảng: ['Tên Tab' => ID_Của_Tab]
                 $info[$sheet->getProperties()->getTitle()] = $sheet->getProperties()->getSheetId();
             }
             return $info;
@@ -608,7 +613,7 @@ class GoogleSheetService
         return $sheets[$sheetName];
     }
 
-    // --- Káº¾T THÃšC ---
+    // --- KẾT THÚC ---
 
     // ==========================================
 }

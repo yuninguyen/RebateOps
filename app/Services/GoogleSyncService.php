@@ -8,11 +8,16 @@ use App\Models\PayoutLog;
 use App\Models\PayoutMethod;
 use App\Models\RebateTracker;
 use App\Models\Platform;
+use App\Filament\Resources\Traits\HasUsStates;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 
 class GoogleSyncService
 {
+    // Dùng Trait HasUsStates đã có sẵn trong project thay vì
+    // khai báo lại $usStates 2 lần bên trong formatAccount() và formatTracker().
+    use HasUsStates;
+
     protected GoogleSheetService $sheetService;
 
     public function __construct(GoogleSheetService $sheetService)
@@ -21,11 +26,12 @@ class GoogleSyncService
     }
 
     /**
-     * Helper to safely format dates
+     * Helper: Format ngày an toàn, trả về 'N/A' nếu null hoặc lỗi.
      */
-    protected function formatDate($date, $format = 'd/m/Y'): string
+    protected function formatDate($date, string $format = 'd/m/Y'): string
     {
-        if (!$date) return 'N/A';
+        if (!$date)
+            return 'N/A';
         try {
             return Carbon::parse($date)->format($format);
         } catch (\Exception $e) {
@@ -33,23 +39,17 @@ class GoogleSyncService
         }
     }
 
-    // =========================================================================
-    // 1. ACCOUNTS
-    // =========================================================================
-
-    public static array $accountHeaders = [
-        'ID', 'Email Address', 'Email Password', 'Recovery Email', '2FA/Code',
-        'Note (Email)', 'Status (Email)', 'Platform', 'Platform Password',
-        'State Create', 'Device Create', 'Date Create', 'Platform Status',
-        'Holder', 'Platform Note', 'Device Linked', 'Date Linked PayPal',
-        'Personal Information', 'Last Sync'
-    ];
-
-    public function formatAccount(Account $record): array
+    /**
+     * Helper: Chuyển mảng status thô (của Account) thành chuỗi hiển thị.
+     *
+     * ✅ FIX #8: Account::$casts đã cast 'status' => 'array', nên $record->status
+     * LUÔN LÀ array. Không cần json_decode() thủ công nữa.
+     */
+    protected function mapAccountStatuses(mixed $rawStatuses): string
     {
-        $rawStatuses = $record->status;
-        $statusArray = is_array($rawStatuses) ? $rawStatuses : (json_decode($rawStatuses, true) ?? [$rawStatuses]);
-        $mappedPlatformStatuses = array_map(function ($status) {
+        $statusArray = (array) ($rawStatuses ?? []);
+
+        $mapped = array_map(function (string $status): string {
             return match ($status) {
                 'used' => 'In Use',
                 'limited' => 'PayPal Limited',
@@ -57,11 +57,52 @@ class GoogleSyncService
                 'unlinked' => 'Unlinked PayPal',
                 'not_linked' => 'Not Linked to PayPal',
                 'no_paypal_needed' => 'No PayPal Required',
-                default => ucfirst(str_replace('_', ' ', (string) $status)),
+                default => ucfirst(str_replace('_', ' ', $status)),
             };
         }, array_filter($statusArray));
-        $platformStatusString = implode(' → ', $mappedPlatformStatuses);
 
+        return implode(' → ', $mapped);
+    }
+
+    /**
+     * Helper: Chuyển mã tiểu bang thành chuỗi "TX - Texas".
+     */
+    protected function formatState(?string $state): string
+    {
+        if (!$state)
+            return 'N/A';
+        // HasUsStates khai báo $usStates là public static array nên dùng self::
+        return "{$state} - " . (self::$usStates[$state] ?? $state);
+    }
+
+    // =========================================================================
+    // 1. ACCOUNTS
+    // =========================================================================
+
+    public static array $accountHeaders = [
+        'ID',
+        'Email Address',
+        'Email Password',
+        'Recovery Email',
+        '2FA/Code',
+        'Note (Email)',
+        'Status (Email)',
+        'Platform',
+        'Platform Password',
+        'State',
+        'Device',
+        'Create Date',
+        'Status',
+        'Owner',
+        'Note',
+        'Device Linked PayPal',
+        'Date Linked PayPal',
+        'Personal Information',
+        'Last Sync'
+    ];
+
+    public function formatAccount(Account $record): array
+    {
         $rawEmailStatus = $record->email?->status;
         $emailStatusLabel = match ($rawEmailStatus) {
             'active' => 'Live',
@@ -70,20 +111,6 @@ class GoogleSyncService
             null => 'N/A',
             default => ucfirst((string) $rawEmailStatus),
         };
-
-        $usStates = [
-            'AL' => 'Alabama', 'AK' => 'Alaska', 'AZ' => 'Arizona', 'AR' => 'Arkansas', 'CA' => 'California',
-            'CO' => 'Colorado', 'CT' => 'Connecticut', 'DE' => 'Delaware', 'FL' => 'Florida', 'GA' => 'Georgia',
-            'HI' => 'Hawaii', 'ID' => 'Idaho', 'IL' => 'Illinois', 'IN' => 'Indiana', 'IA' => 'Iowa',
-            'KS' => 'Kansas', 'KY' => 'Kentucky', 'LA' => 'Louisiana', 'ME' => 'Maine', 'MD' => 'Maryland',
-            'MA' => 'Massachusetts', 'MI' => 'Michigan', 'MN' => 'Minnesota', 'MS' => 'Mississippi', 'MO' => 'Missouri',
-            'MT' => 'Montana', 'NE' => 'Nebraska', 'NV' => 'Nevada', 'NH' => 'New Hampshire', 'NJ' => 'New Jersey',
-            'NM' => 'New Mexico', 'NY' => 'New York', 'NC' => 'North Carolina', 'ND' => 'North Dakota', 'OH' => 'Ohio',
-            'OK' => 'Oklahoma', 'OR' => 'Oregon', 'PA' => 'Pennsylvania', 'RI' => 'Rhode Island', 'SC' => 'South Carolina',
-            'SD' => 'South Dakota', 'TN' => 'Tennessee', 'TX' => 'Texas', 'UT' => 'Utah', 'VT' => 'Vermont',
-            'VA' => 'Virginia', 'WA' => 'Washington', 'WV' => 'West Virginia', 'WI' => 'Wisconsin', 'WY' => 'Wyoming',
-            'DC' => 'District of Columbia', 'PR' => 'Puerto Rico', 'VI' => 'Virgin Islands', 'Other' => 'Other',
-        ];
 
         return [
             $record->id,
@@ -95,10 +122,10 @@ class GoogleSyncService
             $emailStatusLabel,
             $record->platform,
             $record->password,
-            $record->state ? "{$record->state} - " . ($usStates[$record->state] ?? '') : 'N/A',
+            $this->formatState($record->state),    // ✅ Dùng helper thay vì inline $usStates
             $record->device ?? 'N/A',
             $this->formatDate($record->account_created_at),
-            $platformStatusString,
+            $this->mapAccountStatuses($record->status), // ✅ Dùng helper
             $record->user?->name ?? 'N/A',
             $record->note ?? '',
             $record->device_linked_paypal ?? 'N/A',
@@ -114,11 +141,7 @@ class GoogleSyncService
             $records = Account::with(['email', 'user'])->get();
         }
 
-        if ($records instanceof Collection) {
-            $grouped = $records->groupBy(fn($r) => $r->platform ?: 'General');
-        } else {
-            $grouped = collect($records)->groupBy(fn($r) => $r->platform ?: 'General');
-        }
+        $grouped = collect($records)->groupBy(fn($r) => $r->platform ?: 'General');
 
         $totalUpdated = 0;
         $totalAppended = 0;
@@ -146,8 +169,17 @@ class GoogleSyncService
     // =========================================================================
 
     public static array $emailHeaders = [
-        'ID', 'Status', 'Email Address', 'Password', 'Recovery Email',
-        '2FA Code', 'Date Created', 'Provider', 'Usage', 'Platforms', 'Note'
+        'ID',
+        'Status',
+        'Email Address',
+        'Password',
+        'Recovery Email',
+        '2FA Code',
+        'Date Create',
+        'Provider',
+        'Usage',
+        'Platforms',
+        'Note'
     ];
 
     public function formatEmail(Email $record): array
@@ -159,7 +191,7 @@ class GoogleSyncService
         $usage = $record->accounts->count() > 0 ? (string) $record->accounts->count() : 'N/A';
 
         // 3. Map Platform slugs to full names for Platforms column
-        $platforms_map = \App\Models\Platform::pluck('name', 'slug')->toArray();
+        $platforms_map = Platform::pluck('name', 'slug')->toArray();
         $platforms = $record->accounts->pluck('platform')
             ->map(fn($s) => $platforms_map[$s] ?? $s)
             ->unique()->implode(', ') ?: 'N/A';
@@ -201,9 +233,9 @@ class GoogleSyncService
         // 🎨 Format Status colors (Live, Disabled, Locked)
         $statusIdx = array_search('Status', self::$emailHeaders);
         $this->sheetService->applyFormattingWithRules($targetTab, $statusIdx, [
-            'Live'     => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85], // Light Green
-            'Disabled' => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],  // Light Red
-            'Locked'   => ['red' => 0.9,  'green' => 0.4,  'blue' => 0.4],  // Deep Red
+            'Live' => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85], // Light Green
+            'Disabled' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],  // Light Red
+            'Locked' => ['red' => 0.9, 'green' => 0.4, 'blue' => 0.4],  // Deep Red
         ]);
 
         // ✂️ Column clipping (Keep it neat)
@@ -213,18 +245,39 @@ class GoogleSyncService
         return $result;
     }
 
-
     // =========================================================================
     // 3. PAYOUT METHODS
     // =========================================================================
 
     public static array $payoutMethodHeaders = [
-        'ID', 'Wallet Name', 'Method Type', 'Current Balance (USD)', 'Email Address',
-        'Email Password', 'PayPal Account', 'PayPalpassword', 'Authenticator Code',
-        'Full Name', 'Date of Birth', 'SSN / Tax ID', 'Phone Number', 'Full Address',
-        'Question Security 1', 'Answer 1', 'Question Security 2', 'Answer 2',
-        'Proxy Type', 'IP Address', 'Location', 'ISP (Network Provider)',
-        'Browser Name', 'Device', 'Status', 'Note', 'Trạng thái kích hoạt', 'Last sync'
+        'ID',
+        'Wallet Name',
+        'Method Type',
+        'Current Balance (USD)',
+        'Email Address',
+        'Email Password',
+        'PayPal Account',
+        'PayPalpassword',
+        'Authenticator Code',
+        'Full Name',
+        'Date of Birth',
+        'SSN / Tax ID',
+        'Phone Number',
+        'Full Address',
+        'Question Security 1',
+        'Answer 1',
+        'Question Security 2',
+        'Answer 2',
+        'Proxy Type',
+        'IP Address',
+        'Location',
+        'ISP (Network Provider)',
+        'Browser Name',
+        'Device',
+        'Status',
+        'Note',
+        'Trạng thái kích hoạt',
+        'Last sync'
     ];
 
     public function formatPayoutMethod(PayoutMethod $record): array
@@ -274,13 +327,12 @@ class GoogleSyncService
         $result = $this->sheetService->upsertRows($rows, $targetTab, self::$payoutMethodHeaders);
 
         $statusIdx = array_search('Status', self::$payoutMethodHeaders);
-        $methodColors = [
-            'Active'              => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
-            'Limited'             => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],
-            'Permanently Limited' => ['red' => 0.9,  'green' => 0.5,  'blue' => 0.5],
-            'Restored'            => ['red' => 0.8,  'green' => 0.8,  'blue' => 1.0],
-        ];
-        $this->sheetService->applyFormattingWithRules($targetTab, $statusIdx, $methodColors);
+        $this->sheetService->applyFormattingWithRules($targetTab, $statusIdx, [
+            'Active' => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
+            'Limited' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],
+            'Permanently Limited' => ['red' => 0.9, 'green' => 0.5, 'blue' => 0.5],
+            'Restored' => ['red' => 0.8, 'green' => 0.8, 'blue' => 1.0],
+        ]);
 
         $this->sheetService->formatColumnsAsClip($targetTab, 4, 8);
         $this->sheetService->formatColumnsAsClip($targetTab, 13, 14);
@@ -294,18 +346,40 @@ class GoogleSyncService
     // =========================================================================
 
     public static array $payoutLogHeaders = [
-        'ID', 'Date', 'Email', 'Platform', 'Wallet', 'Asset type', 'Gift Card Brand',
-        'Card number', 'PIN', 'Transaction type', 'Amount', 'Fee', 'Boost (%)',
-        'Net USD', 'Rate', 'VND', 'Status', 'Note'
+        'ID',
+        'Date',
+        'Email',
+        'Platform',
+        'Wallet',
+        'Asset type',
+        'Gift Card Brand',
+        'Card number',
+        'PIN',
+        'Transaction type',
+        'Amount',
+        'Fee',
+        'Boost (%)',
+        'Net USD',
+        'Rate',
+        'VND',
+        'Status',
+        'Note'
     ];
 
-    public function formatPayoutLog(PayoutLog $record): array
+    /**
+     * ✅ FIX #6: Nhận $platformNames từ ngoài (đã query 1 lần) thay vì
+     * gọi Platform::where() mỗi lần format → tránh N+1 query.
+     */
+    public function formatPayoutLog(PayoutLog $record, array $platformNames = []): array
     {
+        $platformName = $platformNames[$record->account?->platform]
+            ?? strtoupper($record->account?->platform ?? 'N/A');
+
         return [
             (string) $record->id,
             $this->formatDate($record->created_at, 'd/m/Y H:i'),
             (string) ($record->account?->email?->email ?? 'N/A'),
-            (string) (Platform::where('slug', $record->account?->platform)->value('name') ?? strtoupper($record->account?->platform ?? 'N/A')),
+            (string) $platformName,
             (string) ($record->payoutMethod?->name ?? ($record->asset_type === 'gift_card' ? 'In-Hand' : 'N/A')),
             (string) strtoupper(str_replace('_', ' ', $record->asset_type ?? 'N/A')),
             (string) ucwords(str_replace('_', ' ', $record->gc_brand ?? 'N/A')),
@@ -332,8 +406,13 @@ class GoogleSyncService
             $records->load(['account.email', 'payoutMethod']);
         }
 
+        // ✅ FIX #6: Query Platform 1 lần, truyền vào format loop
+        $platformNames = Platform::pluck('name', 'slug')->toArray();
+
         $targetTab = 'Payout_Logs';
-        $rows = collect($records)->map(fn($r) => $this->formatPayoutLog($r))->values()->toArray();
+        $rows = collect($records)
+            ->map(fn($r) => $this->formatPayoutLog($r, $platformNames))
+            ->values()->toArray();
 
         $this->sheetService->createSheetIfNotExist($targetTab);
         $result = $this->sheetService->upsertRows($rows, $targetTab, self::$payoutLogHeaders);
@@ -341,9 +420,9 @@ class GoogleSyncService
         // 🎨 Format Status colors (Pending, Completed, Rejected)
         $statusIdx = array_search('Status', self::$payoutLogHeaders);
         $this->sheetService->applyFormattingWithRules($targetTab, $statusIdx, [
-            'Pending'   => ['red' => 1.0,  'green' => 0.9,  'blue' => 0.6], // Yellowish
+            'Pending' => ['red' => 1.0, 'green' => 0.9, 'blue' => 0.6], // Yellowish
             'Completed' => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85], // Green
-            'Rejected'  => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],  // Red
+            'Rejected' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],  // Red
         ]);
 
         // ✂️ Column clipping
@@ -353,49 +432,35 @@ class GoogleSyncService
         return $result;
     }
 
-
     // =========================================================================
-    // 5. REGATE TRACKERS
+    // 5. REBATE TRACKERS
     // =========================================================================
 
     public static array $trackerHeaders = [
-        'ID', 'Email Address', 'Password', 'Platform', 'User', 'Account Status Tracking',
-        'Transaction Date', 'Store Name', 'Order ID', 'Order Value ($)',
-        'Cashback Percent (%)', 'Rebate Amount ($)', 'Status', 'Payout Date',
-        'Device', 'State', 'Note', 'Detail Transaction'
+        'ID',
+        'Email Address',
+        'Password',
+        'Platform',
+        'User',
+        'Account Status Tracking',
+        'Transaction Date',
+        'Store Name',
+        'Order ID',
+        'Order Value ($)',
+        'Cashback Percent (%)',
+        'Rebate Amount ($)',
+        'Status',
+        'Payout Date',
+        'Device',
+        'State',
+        'Note',
+        'Detail Transaction'
     ];
 
     public function formatTracker(RebateTracker $record): array
     {
-        $rawStatuses = $record->account?->status;
-        $statusArray = is_array($rawStatuses) ? $rawStatuses : (json_decode($rawStatuses, true) ?? [$rawStatuses]);
-        $mappedStatuses = array_map(function ($status) {
-            return match ($status) {
-                'used' => 'In Use',
-                'limited' => 'PayPal Limited',
-                'linked' => 'Linked PayPal',
-                'unlinked' => 'Unlinked PayPal',
-                'not_linked' => 'Not Linked to PayPal',
-                'no_paypal_needed' => 'No PayPal Required',
-                default => ucfirst(str_replace('_', ' ', (string) $status)),
-            };
-        }, array_filter($statusArray));
-        $statusString = implode(' → ', $mappedStatuses);
-
-        $usStates = [
-            'AL' => 'Alabama', 'AK' => 'Alaska', 'AZ' => 'Arizona', 'AR' => 'Arkansas', 'CA' => 'California',
-            'CO' => 'Colorado', 'CT' => 'Connecticut', 'DE' => 'Delaware', 'FL' => 'Florida', 'GA' => 'Georgia',
-            'HI' => 'Hawaii', 'ID' => 'Idaho', 'IL' => 'Illinois', 'IN' => 'Indiana', 'IA' => 'Iowa',
-            'KS' => 'Kansas', 'KY' => 'Kentucky', 'LA' => 'Louisiana', 'ME' => 'Maine', 'MD' => 'Maryland',
-            'MA' => 'Massachusetts', 'MI' => 'Michigan', 'MN' => 'Minnesota', 'MS' => 'Mississippi', 'MO' => 'Missouri',
-            'MT' => 'Montana', 'NE' => 'Nebraska', 'NV' => 'Nevada', 'NH' => 'New Hampshire', 'NJ' => 'New Jersey',
-            'NM' => 'New Mexico', 'NY' => 'New York', 'NC' => 'North Carolina', 'ND' => 'North Dakota', 'OH' => 'Ohio',
-            'OK' => 'Oklahoma', 'OR' => 'Oregon', 'PA' => 'Pennsylvania', 'RI' => 'Rhode Island', 'SC' => 'South Carolina',
-            'SD' => 'South Dakota', 'TN' => 'Tennessee', 'TX' => 'Texas', 'UT' => 'Utah', 'VT' => 'Vermont',
-            'VA' => 'Virginia', 'WA' => 'Washington', 'WV' => 'West Virginia', 'WI' => 'Wisconsin', 'WY' => 'Wyoming',
-            'DC' => 'District of Columbia', 'PR' => 'Puerto Rico', 'VI' => 'Virgin Islands', 'Other' => 'Other',
-        ];
-        $stateName = $record->state ? "{$record->state} - " . ($usStates[$record->state] ?? '') : 'N/A';
+        // ✅ FIX #8: $record->account->status luôn là array (đã cast)
+        $statusString = $this->mapAccountStatuses($record->account?->status);
 
         return [
             $record->id,
@@ -420,7 +485,7 @@ class GoogleSyncService
             },
             $this->formatDate($record->payout_date, 'Y-m-d'),
             $record->device ?? 'N/A',
-            $stateName,
+            $this->formatState($record->state),  // ✅ Dùng helper
             $record->note ?? 'N/A',
             $record->detail_transaction ?? 'N/A',
         ];
@@ -441,11 +506,10 @@ class GoogleSyncService
         $allRows = $recordsCollection->map(fn($t) => $this->formatTracker($t))->values()->toArray();
         $this->sheetService->createSheetIfNotExist($allTab);
         $this->sheetService->upsertRows($allRows, $allTab, self::$trackerHeaders);
-        
         $this->applyTrackerFormatting($allTab);
 
         $grouped = $recordsCollection->groupBy(fn($t) => $t->account?->platform ?: 'General');
-        
+
         $totalUpdated = 0;
         $totalAppended = 0;
 
@@ -455,7 +519,6 @@ class GoogleSyncService
 
             $this->sheetService->createSheetIfNotExist($targetTab);
             $result = $this->sheetService->upsertRows($rows, $targetTab, self::$trackerHeaders);
-            
             $this->applyTrackerFormatting($targetTab);
 
             $totalUpdated += $result['updated'];
@@ -465,9 +528,10 @@ class GoogleSyncService
         return ['updated' => $totalUpdated, 'appended' => $totalAppended, 'tabs' => $grouped->count() + 1];
     }
 
-    /**
-     * Đồng bộ một bản ghi duy nhất (Dùng cho Jobs/Observers)
-     */
+    // =========================================================================
+    // SYNC RECORD (Dùng cho Jobs/Observers - sync 1 bản ghi)
+    // =========================================================================
+
     public function syncRecord($record, string $action = 'upsert', ?string $platform = null): void
     {
         $modelClass = get_class($record);
@@ -498,9 +562,11 @@ class GoogleSyncService
                 break;
 
             case PayoutLog::class:
+                // ✅ FIX #6: Cache platform names ngay cả khi sync 1 record
+                $platformNames = Platform::pluck('name', 'slug')->toArray();
                 $targetTabs = ['Payout_Logs'];
                 $headers = self::$payoutLogHeaders;
-                $formattedRow = $this->formatPayoutLog($record);
+                $formattedRow = $this->formatPayoutLog($record, $platformNames);
                 break;
 
             case PayoutMethod::class:
@@ -510,12 +576,13 @@ class GoogleSyncService
                 break;
         }
 
-        if (empty($targetTabs)) return;
+        if (empty($targetTabs))
+            return;
 
         // 2. Thực hiện Action (Upsert hoặc Delete)
         foreach ($targetTabs as $tabName) {
             if ($action === 'delete') {
-                $this->sheetService->deleteRowsByIds([(string)$record->id], $tabName);
+                $this->sheetService->deleteRowsByIds([(string) $record->id], $tabName);
                 continue;
             }
 
@@ -528,36 +595,41 @@ class GoogleSyncService
         }
     }
 
-    /**
-     * Áp dụng định dạng (màu sắc, clipping) cho từng loại Tab cụ thể
-     */
+    // =========================================================================
+    // FORMATTING HELPERS
+    // =========================================================================
+
     protected function applySpecificTabFormatting(string $tabName): void
     {
         if ($tabName === 'Emails') {
             $statusIdx = array_search('Status', self::$emailHeaders);
             $this->sheetService->applyFormattingWithRules($tabName, $statusIdx, [
-                'Live'     => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
-                'Disabled' => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],
+                'Live' => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
+                'Disabled' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],
             ]);
             $this->sheetService->formatColumnsAsClip($tabName, 2, 4);
+
         } elseif ($tabName === 'Payout_Logs') {
             $statusIdx = array_search('Status', self::$payoutLogHeaders);
             $this->sheetService->applyFormattingWithRules($tabName, $statusIdx, [
-                'Pending'   => ['red' => 1.0,  'green' => 0.9,  'blue' => 0.6],
+                'Pending' => ['red' => 1.0, 'green' => 0.9, 'blue' => 0.6],
                 'Completed' => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
-                'Rejected'  => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],
+                'Rejected' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],
             ]);
             $this->sheetService->formatColumnsAsClip($tabName, 7, 9);
+
         } elseif ($tabName === 'Payout_Methods') {
             $statusIdx = array_search('Status', self::$payoutMethodHeaders);
             $this->sheetService->applyFormattingWithRules($tabName, $statusIdx, [
                 'Active' => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
             ]);
             $this->sheetService->formatColumnsAsClip($tabName, 4, 8);
+
         } elseif (str_ends_with($tabName, '_Accounts')) {
             $this->sheetService->formatColumnsAsClip($tabName, 5, 6);
             $this->sheetService->formatColumnsAsClip($tabName, 14, 15);
             $this->sheetService->formatColumnsAsClip($tabName, 17, 18);
+
         } elseif (str_contains($tabName, '_Tracker')) {
             $this->applyTrackerFormatting($tabName);
         }
@@ -567,14 +639,13 @@ class GoogleSyncService
     {
         $statusIdx = array_search('Status', self::$trackerHeaders);
         $this->sheetService->applyFormattingWithRules($targetTab, $statusIdx, [
-            'Confirmed'         => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85], // Green
-            'Clicked / Ordered' => ['red' => 1.0,  'green' => 1.0,  'blue' => 0.8],  // Light Yellow
-            'Pending'           => ['red' => 1.0,  'green' => 0.9,  'blue' => 0.6],  // Yellow
-            'Ineligible'        => ['red' => 0.9,  'green' => 0.5,  'blue' => 0.5],  // Red
-            'Missing'           => ['red' => 1.0,  'green' => 0.8,  'blue' => 0.8],  // Light Red
+            'Confirmed' => ['red' => 0.85, 'green' => 0.95, 'blue' => 0.85],
+            'Clicked / Ordered' => ['red' => 1.0, 'green' => 1.0, 'blue' => 0.8],
+            'Pending' => ['red' => 1.0, 'green' => 0.9, 'blue' => 0.6],
+            'Ineligible' => ['red' => 0.9, 'green' => 0.5, 'blue' => 0.5],
+            'Missing' => ['red' => 1.0, 'green' => 0.8, 'blue' => 0.8],
         ]);
 
         $this->sheetService->formatColumnsAsClip($targetTab, 16, 18); // Note & Detail Transaction
     }
 }
-

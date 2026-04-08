@@ -45,13 +45,7 @@ class AdminUserEarningsTable extends BaseWidget
         $operatorQuery = UserPayment::query()
             ->join('users', 'user_payments.user_id', '=', 'users.id')
             ->where('users.role', 'operator')
-            ->select('user_payments.user_id as user_id', 'users.role as user_role', 'users.name as user_name')
-            ->selectRaw("
-                CASE 
-                    WHEN transaction_type LIKE 'Gift Card%' THEN 'gift_card'
-                    ELSE 'paypal'
-                END as asset_group
-            ")
+            ->select('user_payments.user_id as user_id', 'users.role as user_role', 'users.name as user_name', 'user_payments.asset_group as asset_group')
             ->selectRaw('SUM(CASE WHEN status = "pending" THEN total_vnd ELSE 0 END) as amount_pending')
             ->selectRaw('SUM(CASE WHEN status = "paid" THEN total_vnd ELSE 0 END) as amount_paid')
             ->groupBy('user_id', 'asset_group', 'user_role')
@@ -75,8 +69,10 @@ class AdminUserEarningsTable extends BaseWidget
                  AND (? IS NULL OR created_at <= ?)
                 ) as amount_paid
             ', [
-                $data['from_date'] ?? null, $data['from_date'] ?? null,
-                $data['to_date'] ?? null, $data['to_date'] ?? null
+                $data['from_date'] ?? null,
+                $data['from_date'] ?? null,
+                $data['to_date'] ?? null,
+                $data['to_date'] ?? null
             ])
             ->when($data['user_id'] ?? null, fn($query, $userId) => $query->where('id', $userId));
 
@@ -86,7 +82,7 @@ class AdminUserEarningsTable extends BaseWidget
                 if (!auth()->user()?->isAdmin() && !auth()->user()?->isFinance()) {
                     return UserPayment::query()->withTrashed()->fromSub($operatorQuery, 'consolidated_payroll');
                 }
-                
+
                 return UserPayment::query()->withTrashed()->fromSub($operatorQuery->union($financeQuery), 'consolidated_payroll');
             })
             ->columns([

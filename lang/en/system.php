@@ -79,6 +79,7 @@ return [
 
     // COMMON LABELS (FORMS/TABLES)
     'labels' => [
+        'account' => 'Account',
         'user' => 'User',
         'platform' => 'Platform',
         'account_email' => 'Account',
@@ -126,7 +127,7 @@ return [
         'description' => 'Description',
         'rebate_amount_usd' => 'Rebate Amount ($)',
         'profit' => 'Profit',
-        'settlement_date' => 'Settlement Date',
+        'payment_date' => 'Payment Date',
         'from' => 'From',
         'until' => 'To',
         'order_date' => 'Order Date',
@@ -152,6 +153,13 @@ return [
         'quick_set_status' => 'Update Status',
         'quick_set_date' => 'Update Payout Date',
         'select_payout_date' => 'Select Payout Date',
+        'batch' => 'Batch',
+        'no_batch' => 'No Batch',
+        'batch_name' => 'Batch Name',
+        'note_for_all' => 'Note for all',
+        'user_batch' => 'Staff | Batch',
+        'batch_id' => 'Batch ID',
+        'quick_set_payment_date' => 'Update Payment Date',
     ],
 
     'actions' => [
@@ -390,6 +398,9 @@ return [
         'actions' => [
             'up_bill' => 'Up Bill',
             'view_bill' => 'View Bill',
+            'batch_selected' => 'Batch Selected',
+            'unbatch_selected' => 'Unbatch Selected',
+            'pay_out_batch' => 'Pay Out Batch',
         ],
     ],
     'payout_methods' => [
@@ -480,4 +491,5 @@ return [
         ],
     ],
 ];
+
 

@@ -697,14 +697,7 @@ class PayoutLogResource extends Resource
             // Trong phần Table configuration
             ->recordAction(null) // Tắt click action
             ->recordUrl(null)    // Tắt URL navigation
-            // 🟢 1. NHÓM THEO ACCOUNT (Cột thật, không bao giờ lỗi Sum)
-            ->groups([
-                Tables\Grouping\Group::make('account_id')
-                    ->label(__('system.labels.account_email'))
-                    ->collapsible()
-                    ->getTitleFromRecordUsing(fn($record) => $record->account?->email?->email ?? __('system.n/a')),
-            ])
-            ->defaultGroup('account_id')
+            // 🟢 TỔNG KẾT THEO TÀI KHOẢN & THƯƠNG HIỆU: Đã có Groups ở cuối File lo liệu
 
             // 🟢 BƯỚC 3: Hiệu ứng thụt lề và đổi màu cho dòng con (Liquidation)
             // Dòng con: Có vạch xanh, thụt lề nhẹ
@@ -740,15 +733,21 @@ class PayoutLogResource extends Resource
                         $platform_name = \App\Models\Platform::where('slug', $account->platform)->value('name');
                         $platform = $platform_name ?? ucwords(str_replace(['_', '-'], ' ', $account->platform ?? __('system.n/a')));
 
+                        $userName = $record->user?->name ?? __('system.n/a');
+
                         return "
-                                <div style='line-height: 1.7;'>
-                                    <div style='margin-bottom: 4px;'>
-                                        <span style='color: #111827;'>$email</span>
-                                        <span style='color: #6b7280; display: inline-block;'>" . __('system.labels.platform') . ":</span> 
-                                        <span style='color: #4b5563;'>$platform</span>
-                                    </div>
+                            <div style='line-height: 1.6; padding: 4px 0;'>
+                                <div style='font-weight: 600; color: #111827; margin-bottom: 4px;'>$email</div>
+                                <div style='font-size: 11px; color: #6b7280; display: flex; align-items: center; gap: 4px;'>
+                                    <span style='color: #9ca3af;'>" . __('system.labels.user') . ":</span> 
+                                    <span style='font-weight: 500; color: #4b5563;'>$userName</span>
                                 </div>
-                            ";
+                                <div style='font-size: 11px; color: #6b7280; display: flex; align-items: center; gap: 4px;'>
+                                    <span style='color: #9ca3af;'>" . __('system.labels.platform') . ":</span> 
+                                    <span style='font-weight: 500; color: #4b5563;'>$platform</span>
+                                </div>
+                            </div>
+                        ";
                     })
                     // Tìm kiếm xuyên bảng: tìm theo email hoặc tìm theo platform trong bảng accounts
                     ->searchable(query: function ($query, string $search) {
@@ -922,8 +921,8 @@ class PayoutLogResource extends Resource
                             ->label('')
                             ->prefix('$')
                             ->numeric(2, '.', ',')
-                            // 🟢 CHỈ CỘNG DÒNG GỐC (Tránh x2 số tiền)
-                            ->query(fn($query) => $query->whereNull('parent_id'))
+                            // 🟢 CHỈ TÍNH DÒNG CHA: Tránh cộng dồn cả dòng Liquidation con vào tổng USD
+                            ->query(fn($query) => $query->whereNull('payout_logs.parent_id'))
                     ),
                 Tables\Columns\TextColumn::make('total_vnd')
                     ->label(__('system.labels.total_vnd'))
@@ -938,7 +937,8 @@ class PayoutLogResource extends Resource
                             ->label('')
                             ->prefix('₫')
                             ->numeric(0, ',', '.')
-                            ->query(fn($query) => $query->where('transaction_type', 'liquidation'))
+                            // 🟢 CHỈ TÍNH DÒNG CON: Tránh cộng dồn các dòng Withdrawal (Pending) vào tổng VND
+                            ->query(fn($query) => $query->where('payout_logs.transaction_type', 'liquidation'))
                     ),
                 Tables\Columns\TextColumn::make('status')
                     ->label(__('system.labels.status'))
@@ -952,17 +952,14 @@ class PayoutLogResource extends Resource
                     })
                     ->formatStateUsing(fn(string $state): string => __("system.status.{$state}")),
 
-                Tables\Columns\TextColumn::make('payment_status')
-                    ->label(__('system.labels.disbursement_status')) // Đổi từ Chốt sổ
-                    ->getStateUsing(fn($record) => $record->user_payment_id ? 'completed' : 'pending') // Paid: Đã chốt, Unpaid: Chưa chốt
+                Tables\Columns\TextColumn::make('userPayment.batch_id')
+                    ->label(__('system.labels.batch_id'))
                     ->badge()
-                    ->alignment(Alignment::Center)
-                    ->color(fn(string $state): string => match ($state) {
-                        'completed' => 'success',
-                        'pending' => 'danger',
-                        default => 'secondary',
-                    })
-                    ->formatStateUsing(fn(string $state): string => __("system.payment_status.{$state}")),
+                    ->placeholder(__('system.n/a'))
+                    ->color('info')
+                    ->weight('bold')
+                    ->searchable()
+                    ->alignment(Alignment::Center),
 
             ])
             ->filters([
@@ -1021,14 +1018,6 @@ class PayoutLogResource extends Resource
                         'rejected' => __('system.status.rejected'),
                     ]),
 
-                Tables\Filters\TernaryFilter::make('user_payment_id')
-                    ->label(__('system.labels.disbursement_status')) // Đổi từ Trạng thái Chốt sổ
-                    ->trueLabel('✅ ' . __('system.payment_status.completed')) // Đã chốt
-                    ->falseLabel('⏳ ' . __('system.payment_status.pending')) // Chưa chốt
-                    ->queries(
-                        true: fn(Builder $query) => $query->whereNotNull('user_payment_id'),
-                        false: fn(Builder $query) => $query->whereNull('user_payment_id'),
-                    ),
 
                 // 2. LỌC THEO THỜI GIAN (TỪ NGÀY - ĐẾN NGÀY)
                 Tables\Filters\Filter::make('created_at')
@@ -1098,7 +1087,7 @@ class PayoutLogResource extends Resource
             // THÊM DÒNG NÀY ĐỂ ĐƯA FILTER RA NGOÀI:
             ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContent)
             // 🟢 THAY ĐỔI DÒNG NÀY: Admin & Finance hiện 4 cột, Staff hiện 3 cột
-            ->filtersFormColumns(auth()->user()?->isAdmin() || auth()->user()?->isFinance() ? 4 : 3) // QUAN TRỌNG: Tổng Layout là 3 cột (Status [1] + Date [2] = 3)
+            ->filtersFormColumns(auth()->user()?->isAdmin() || auth()->user()?->isFinance() ? 6 : 5)
             ->actions([
                 //Nút Exchange to VND ở cột Transaction Type
                 Tables\Actions\Action::make('currency_exchange')
@@ -1222,7 +1211,7 @@ class PayoutLogResource extends Resource
 
                         \App\Models\PayoutLog::create([
                             'parent_id' => $record->id,
-                            'user_id' => auth()->id(),
+                            'user_id' => $record->user_id,
                             'account_id' => $record->account_id,
                             'payout_method_id' => $record->payout_method_id,
                             'transaction_type' => 'liquidation',
@@ -1425,6 +1414,7 @@ class PayoutLogResource extends Resource
                                 $payment = \App\Models\UserPayment::create([
                                     'user_id' => $firstLog->user_id,
                                     'platform' => $platformName,
+                                    'asset_group' => $firstLog->asset_type === 'gift_card' ? 'gift_card' : 'paypal',
                                     'transaction_type' => ($firstLog->asset_type === 'gift_card' ? 'Gift Card' : 'PayPal') . " ({$sourceName})",
                                     'total_usd' => $totalUsd,
                                     'exchange_rate' => $averageMarketRate, // Lưu Market Rate để đối soát
@@ -1454,7 +1444,35 @@ class PayoutLogResource extends Resource
                     Tables\Actions\RestoreBulkAction::make(),     // 🟢 Khôi phục nhiều dòng
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->groups([
+                // 🟢 GROUPING THEO ACCOUNT + BRAND (Sử dụng Composite Key)
+                // 🛑 QUAN TRỌNG: Đặt tên Group là 'account_id' (cột thật) để Filament không báo lỗi Order Clause
+                // Nhưng bucket (key) vẫn là AccountID_Brand để tách biệt Nike/Groupon chuẩn đét cho Sếp.
+                Tables\Grouping\Group::make('account_id')
+                    ->label(__('system.labels.account'))
+                    ->collapsible()
+                    ->getTitleFromRecordUsing(function ($record) {
+                        return $record->account?->email?->email ?? __('system.n/a');
+                    })
+                    ->getKeyFromRecordUsing(function ($record) {
+                        // 🟢 FIX: Dùng ID Account + Brand để tách biệt các dòng. 
+                        // Nếu đã chốt sổ thì dùng user_payment_id để phân từng cụm thanh toán.
+                        return ($record->user_payment_id ?? $record->account_id) . '_' . strtolower($record->gc_brand ?? '');
+                    })
+                    ->scopeQueryByKeyUsing(function (Builder $query, $key) {
+                        // 🟢 TÁCH KEY: [paymentOrAccountId]_[brand]
+                        $parts = explode('_', $key);
+                        $paymentOrAccountId = $parts[0] ?? null;
+                        $brand = $parts[1] ?? '';
+
+                        return $query->where(function ($q) use ($paymentOrAccountId, $brand) {
+                            $q->where(fn($sub) => $sub->where('user_payment_id', $paymentOrAccountId)->orWhere('account_id', $paymentOrAccountId))
+                                ->when($brand, fn($sub) => $sub->whereRaw('LOWER(gc_brand) = ?', [$brand]), fn($sub) => $sub->whereNull('gc_brand'));
+                        });
+                    }),
+            ])
+            ->defaultGroup('account_id');
     }
 
     // 🟢 HÀM HELPER: Tính số dư khả dụng duy nhất tại đây (DRY) + Cache per-request
