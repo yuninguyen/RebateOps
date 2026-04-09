@@ -28,6 +28,11 @@ class PayoutLog extends Model
             $log->children()->delete();
         });
 
+        // Thêm mới: Force delete thì xoá hẳn children
+        static::forceDeleting(function ($log) {
+            $log->children()->withTrashed()->forceDelete();
+        });
+
         static::restoring(function ($log) {
             // 🟢 TỰ ĐỘNG KHÔI PHỤC: Khi khôi phục đơn cha, các dòng con cũng quay lại
             $log->children()->withTrashed()->restore();

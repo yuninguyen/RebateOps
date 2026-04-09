@@ -46,16 +46,16 @@ class PayoutLogPolicy
 
     public function delete(User $user, PayoutLog $log): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isFinance();
     }
 
     public function restore(User $user, PayoutLog $log): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isFinance();
     }
 
     public function forceDelete(User $user, PayoutLog $log): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isFinance();
     }
 }

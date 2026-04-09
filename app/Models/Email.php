@@ -29,8 +29,8 @@ class Email extends Model
     ];
 
     protected $casts = [
-        'email_password'   => 'encrypted',
-        'two_factor_code'  => 'encrypted',
+        'email_password' => 'encrypted',
+        'two_factor_code' => 'encrypted',
         'email_created_at' => 'date',
     ];
 
@@ -40,15 +40,20 @@ class Email extends Model
             // Nếu cột provider đang trống, hệ thống sẽ tự bóc tách từ email
             if (empty($emailModel->provider) && !empty($emailModel->email)) {
                 $email = $emailModel->email;
+                $atPos = strpos($email, '@');
 
-                // Lấy phần domain sau dấu @ (ví dụ: gmail.com)
-                $domain = substr(strrchr($email, "@"), 1);
+                // Chỉ xử lý nếu có ký tự @
+                if ($atPos !== false) {
 
-                // Lấy tên provider (ví dụ: gmail)
-                $providerName = explode('.', $domain)[0];
+                    // Lấy phần domain sau dấu @ (ví dụ: gmail.com)
+                    $domain = substr($email, $atPos + 1);
 
-                // Lưu vào database dưới dạng chữ thường để đồng bộ
-                $emailModel->provider = strtolower($providerName);
+                    // Lấy tên provider (ví dụ: gmail)
+                    $providerName = explode('.', $domain)[0];
+
+                    // Lưu vào database dưới dạng chữ thường để đồng bộ
+                    $emailModel->provider = strtolower($providerName);
+                }
             }
         });
     }
@@ -59,7 +64,7 @@ class Email extends Model
         return $this->hasMany(Account::class);
     }
 
-        // Cấu hình theo dõi toàn bộ các cột được phép điền
+    // Cấu hình theo dõi toàn bộ các cột được phép điền
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

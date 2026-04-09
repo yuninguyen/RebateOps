@@ -81,6 +81,7 @@ class PayoutLogResource extends Resource
             return true;
         }
 
+        // 🟢 KHÓA LUÔN: Nếu đã có đơn con (đã Exchange) thì không cho sửa
         // Dùng children_count (đã eager load từ getEloquentQuery) thay vì children()->count() để tránh N+1
         if ($record->children_count > 0) {
             return false;

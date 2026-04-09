@@ -61,13 +61,13 @@ class PayoutMethodResource extends Resource
     // 🟢 1. ẨN HOÀN TOÀN MENU BÊN TRÁI ĐỐI VỚI STAFF
     public static function shouldRegisterNavigation(): bool
     {
-        return auth()->user()?->isAdmin() || auth()->user()?->isFinance() ?? false;
+        return (bool) (auth()->user()?->isAdmin() || auth()->user()?->isFinance());
     }
 
     // 🟢 2. CHẶN TRUY CẬP TRỰC TIẾP TỪ URL (Chống Staff tự gõ link)
     public static function canAccess(): bool
     {
-        return auth()->user()?->isAdmin() || auth()->user()?->isFinance() ?? false;
+        return (bool) (auth()->user()?->isAdmin() || auth()->user()?->isFinance());
     }
 
     // 🟢 3. FIX LỖI TYPE ERROR SẬP WEB (Luôn phải return Builder)

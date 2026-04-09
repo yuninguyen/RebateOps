@@ -118,9 +118,19 @@ REBATEOPS
 - [x] v5.2: Smart Payout Locking & Multi-Brand Grouping Logic
 - [x] v5.3: Core Localization (VI/EN) & UI Density Optimization
 - [x] v5.4: Advanced Data Recovery (Restore / Force Delete)
+- [x] v5.4.1: Security Patch — Policy registration, operator precedence, cascade forceDelete, email validation
 - [ ] v5.5: Automated Profit/Loss Analytics
 - [ ] v5.6: Bulk Image Processing for Payment Proofs
 - [ ] v5.7: REST API for External Automation
+---
+
+## 🔐 Security & Access Control
+
+| Role | Emails | Accounts | Trackers | Payout Logs | Payout Methods | Disbursement |
+|------|--------|----------|----------|-------------|----------------|--------------|
+| **Admin** | Full | Full | Full | Full | Full | Full |
+| **Finance** | View | View | Hidden | View | View | Full |
+| **Staff** | Own only | Own only | Own only | Own only | Hidden | View own |
 
 ---
 <p align="center">Built for Excellence. Optimized for Profit.</p>
