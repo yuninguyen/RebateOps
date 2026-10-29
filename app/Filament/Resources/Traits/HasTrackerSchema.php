@@ -660,6 +660,12 @@ trait HasTrackerSchema
 
                         $q = RebateTracker::query()
                             ->where('account_id', $record->account_id);
+
+                        if (static::class === RebateTrackerResource::class) {
+                            $q->where(fn (Builder $statusQuery) => $statusQuery
+                                ->whereNull('status')
+                                ->orWhere('status', '!=', 'Missing'));
+                        }
                             
                         if ($record->batch_id) {
                             $q->where('batch_id', $record->batch_id);
