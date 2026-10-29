@@ -210,6 +210,10 @@ class UserPaymentResource extends Resource
                     })
                     ->searchable()
                     ->copyable()
+                    ->wrap()
+                    ->extraCellAttributes([
+                        'style' => 'max-width: 24rem; white-space: normal; overflow-wrap: anywhere;',
+                    ])
                     ->alignment(Alignment::Center), // Chỉnh sát lề trái để dễ đọc hơn khi nhiều dòng
 
                 Tables\Columns\TextColumn::make('total_usd')
