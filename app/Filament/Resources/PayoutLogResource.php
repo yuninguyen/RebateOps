@@ -1336,8 +1336,8 @@ class PayoutLogResource extends Resource
                         $initialAmount = $record->net_amount_usd;
 
                         if ($record->asset_type === 'paypal') {
-                            // PayPal: Lấy số dư tổng của Ví đó
-                            $initialAmount = $record->payoutMethod?->current_balance ?? $record->net_amount_usd;
+                            // PayPal: Prefill the amount received for this withdrawal, not the full wallet balance.
+                            $initialAmount = $record->net_amount_usd;
                         } else {
                             // Gift Card: Lấy số tiền chưa thanh khoản của chính đơn này
                             $liquidated = $record->children()->where('status', 'completed')->sum('amount_usd') ?? 0;
